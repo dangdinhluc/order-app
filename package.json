@@ -1,0 +1,16 @@
+{
+  "name": "hybrid-pos",
+  "private": true,
+  "packageManager": "pnpm@8.15.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "db:migrate": "pnpm --filter backend run db:migrate",
+    "db:seed": "pnpm --filter backend run db:seed"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

@@ -1,0 +1,148 @@
+{
+    "meta": {
+        "schema_version": "1.1.0",
+        "awf_version": "3.3.0",
+        "last_updated": "2026-01-30"
+    },
+    "project": {
+        "name": "Hybrid POS",
+        "description": "Comprehensive Restaurant Management System (POS, QR, KDS, Printing, Notifications)",
+        "status": "Alpha Release (Phase 1-12 Complete)"
+    },
+    "tech_stack": {
+        "backend": {
+            "framework": "Node.js + Express",
+            "language": "TypeScript",
+            "database": "PostgreSQL (pg)",
+            "realtime": "Socket.IO",
+            "auth": "JWT + Bcrypt",
+            "validation": "Zod",
+            "pdf": "PDFKit",
+            "excel": "ExcelJS"
+        },
+        "frontend": {
+            "framework": "React + Vite",
+            "language": "TypeScript",
+            "styling": "TailwindCSS",
+            "icons": "Lucide React",
+            "http_client": "Fetch Wrapper (custom)"
+        }
+    },
+    "features": [
+        {
+            "name": "POS",
+            "status": "completed",
+            "desc": "Table management, Order taking, Payments"
+        },
+        {
+            "name": "QR Order",
+            "status": "completed",
+            "desc": "Customer self-ordering via QR code (CustomerMenuV2)"
+        },
+        {
+            "name": "KDS",
+            "status": "completed",
+            "desc": "Real-time Kitchen Display System with ticket details"
+        },
+        {
+            "name": "Advanced Ops",
+            "status": "completed",
+            "desc": "Note, Split Bill, Transfer/Merge Table, Discounts"
+        },
+        {
+            "name": "Security",
+            "status": "completed",
+            "desc": "Audit Log, PIN Manager, Owner roles"
+        },
+        {
+            "name": "Reports",
+            "status": "completed",
+            "desc": "Sales, Products, Staff, Hourly Heatmap, Table Performance"
+        },
+        {
+            "name": "Print Receipt",
+            "status": "completed",
+            "desc": "Thermal printer support (58mm/80mm), Kitchen tickets"
+        },
+        {
+            "name": "Export Reports",
+            "status": "completed",
+            "desc": "PDF and Excel export for sales and products"
+        },
+        {
+            "name": "Telegram Notifications",
+            "status": "completed",
+            "desc": "Real-time alerts for discounts, voids, daily reports"
+        },
+        {
+            "name": "POS Cashier UX",
+            "status": "in_progress",
+            "desc": "Kitchen workflow, Quick search, Dynamic payment methods, Table areas"
+        }
+    ],
+    "database_schema": {
+        "summary": "POS system lưu: users, menu, orders, thanh toán, audit logs",
+        "tables": [
+            "users",
+            "categories",
+            "products",
+            "combos",
+            "tables",
+            "areas",
+            "customers",
+            "table_sessions",
+            "orders",
+            "order_items",
+            "payments",
+            "promotions",
+            "vouchers",
+            "cash_drawer_logs",
+            "audit_logs",
+            "service_calls",
+            "bill_templates",
+            "settings",
+            "payment_methods"
+        ],
+        "relationships_explained": "1 user xử lý nhiều orders, 1 order có nhiều items, orders thuộc về tables và sessions"
+    },
+    "api_groups": [
+        "Auth (/api/auth) - Đăng nhập, đăng ký, đổi mật khẩu",
+        "Tables (/api/tables) - Quản lý bàn, mở/đóng bàn",
+        "Areas (/api/areas) - Khu vực bàn",
+        "Products (/api/products) - Menu, hình ảnh, giá",
+        "Categories (/api/categories) - Danh mục sản phẩm",
+        "Combos (/api/combos) - Combo giảm giá",
+        "Orders (/api/orders) - Đơn hàng, thanh toán, giảm giá",
+        "Kitchen (/api/kitchen) - KDS items, cập nhật trạng thái",
+        "Reports (/api/reports) - Thống kê doanh thu, sản phẩm",
+        "Export (/api/export) - Xuất PDF/Excel báo cáo",
+        "Notifications (/api/notifications) - Telegram config và test",
+        "Audit (/api/audit) - Lịch sử hoạt động",
+        "Receipt (/api/receipt) - In hóa đơn",
+        "Settings (/api/settings) - Cấu hình hệ thống",
+        "Vouchers (/api/vouchers) - Mã giảm giá",
+        "Cash (/api/cash) - Quản lý ngân quỹ",
+        "QRCode (/api/qrcode) - Tạo QR code cho bàn",
+        "Client (/api/client) - API cho customer QR order",
+        "Customer (/api/customer) - Customer self-order",
+        "Public (/api/public) - Public endpoints không cần auth (payment methods)"
+    ],
+    "knowledge_items": {
+        "patterns": [
+            "Socket.IO rooms: kitchen-room, pos-room, boss-room",
+            "Thermal print via browser print dialog",
+            "Audit logging cho mọi action quan trọng"
+        ],
+        "gotchas": [
+            "order.total là numeric trong Postgres, cần Number() khi tính toán",
+            "Telegram alert không block - dùng .catch(console.error)",
+            "PDFKit không có types - dùng // @ts-ignore",
+            "kitchen_status chỉ có: pending, preparing, ready, served, cancelled (KHÔNG có in_queue)"
+        ],
+        "conventions": [
+            "Vietnamese làm ngôn ngữ chính (labels, messages)",
+            "Japanese là ngôn ngữ phụ (name_ja)",
+            "Currency mặc định: JPY (¥)"
+        ]
+    }
+}
