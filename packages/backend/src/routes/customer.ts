@@ -199,6 +199,65 @@ customerRouter.get('/menu-v3/:tableId', async (req, res) => {
             quickNotesMap[row.product_id] = row.notes;
         });
 
+        // Get active session and order for this table
+        const sessionResult = await query(`
+            SELECT 
+                ts.id as session_id,
+                ts.order_id,
+                ts.started_at,
+                o.total as order_total,
+                o.status as order_status
+            FROM table_sessions ts
+            JOIN orders o ON ts.order_id = o.id
+            WHERE ts.table_id = $1 AND ts.status = 'active'
+            LIMIT 1
+        `, [tableId]);
+
+        let activeSession = null;
+        let currentOrder = null;
+
+        if (sessionResult.rows.length > 0) {
+            const session = sessionResult.rows[0];
+            activeSession = {
+                id: session.session_id,
+                order_id: session.order_id,
+                started_at: session.started_at
+            };
+
+            // Get all kitchen tickets with items for this order
+            const ticketsResult = await query(`
+                SELECT 
+                    kt.id as ticket_id,
+                    kt.ticket_number,
+                    kt.sent_at,
+                    kt.status,
+                    json_agg(
+                        json_build_object(
+                            'id', oi.id,
+                            'product_id', p.id,
+                            'product_name', ${lang === 'vi' ? 'p.name_vi' : lang === 'jp' ? 'COALESCE(p.name_jp, p.name_vi)' : 'COALESCE(p.name_cn, p.name_vi)'},
+                            'quantity', oi.quantity,
+                            'unit_price', oi.unit_price,
+                            'note', oi.note
+                        )
+                    ) as items
+                FROM kitchen_tickets kt
+                JOIN kitchen_ticket_items kti ON kt.id = kti.ticket_id
+                JOIN order_items oi ON kti.order_item_id = oi.id
+                JOIN products p ON oi.product_id = p.id
+                WHERE kt.order_id = $1
+                GROUP BY kt.id, kt.ticket_number, kt.sent_at, kt.status
+                ORDER BY kt.created_at ASC
+            `, [session.order_id]);
+
+            currentOrder = {
+                id: session.order_id,
+                total: session.order_total,
+                status: session.order_status,
+                tickets: ticketsResult.rows
+            };
+        }
+
         // Get V3 settings (including branding)
         const settingsResult = await query(`
             SELECT key, value FROM settings 
@@ -221,6 +280,8 @@ customerRouter.get('/menu-v3/:tableId', async (req, res) => {
             featured: featuredResult.rows,
             slideshow: slideshowResult.rows,
             quickNotes: quickNotesMap,
+            active_session: activeSession,
+            current_order: currentOrder,
             settings
         });
     } catch (error) {
@@ -231,7 +292,7 @@ customerRouter.get('/menu-v3/:tableId', async (req, res) => {
 
 /**
  * POST /api/customer/order
- * Create order from customer (public)
+ * Create/update order from customer using table session model (public)
  */
 customerRouter.post('/order', async (req, res) => {
     try {
@@ -242,7 +303,7 @@ customerRouter.post('/order', async (req, res) => {
             return;
         }
 
-        // Calculate total
+        // Calculate total for new items
         const productIds = items.map((item: { product_id: string }) => item.product_id);
         const productsResult = await query(
             'SELECT id, price FROM products WHERE id = ANY($1)',
@@ -251,38 +312,107 @@ customerRouter.post('/order', async (req, res) => {
 
         const priceMap = new Map<string, number>(productsResult.rows.map((p: { id: string; price: string }) => [p.id, parseFloat(p.price)]));
 
-        let totalAmount = 0;
+        let newItemsTotal = 0;
         for (const item of items) {
             const price = priceMap.get(item.product_id) || 0;
-            totalAmount += price * item.quantity;
+            newItemsTotal += price * item.quantity;
         }
 
-        // Create order
-        const orderResult = await query(
-            `INSERT INTO orders (table_id, status, total, subtotal, note)
-             VALUES ($1, 'open', $2, $2, $3)
-             RETURNING id`,
-            [table_id, totalAmount, notes || null]
+        // 1. Check if table has active session
+        const sessionResult = await query(
+            `SELECT id, order_id FROM table_sessions 
+             WHERE table_id = $1 AND status = 'active'
+             LIMIT 1`,
+            [table_id]
         );
 
-        const orderId = orderResult.rows[0].id;
+        let sessionId: string;
+        let orderId: string;
+        let ticketNumber = 1;
 
-        // Insert order items
-        for (const item of items) {
-            const price = priceMap.get(item.product_id) || 0;
+        if (sessionResult.rows.length > 0) {
+            // Session exists - use existing order
+            sessionId = sessionResult.rows[0].id;
+            orderId = sessionResult.rows[0].order_id;
+
+            // Get next ticket number
+            const ticketCountResult = await query(
+                'SELECT COUNT(*) as count FROM kitchen_tickets WHERE order_id = $1',
+                [orderId]
+            );
+            ticketNumber = parseInt(ticketCountResult.rows[0].count) + 1;
+
+            // Update order total
             await query(
-                `INSERT INTO order_items (order_id, product_id, quantity, unit_price, note)
-                 VALUES ($1, $2, $3, $4, $5)`,
-                [orderId, item.product_id, item.quantity, price, item.notes || null]
+                `UPDATE orders 
+                 SET total = total + $1, subtotal = subtotal + $1, updated_at = NOW()
+                 WHERE id = $2`,
+                [newItemsTotal, orderId]
+            );
+        } else {
+            // No session - create new session and order
+            const newOrderResult = await query(
+                `INSERT INTO orders (table_id, status, total, subtotal, note)
+                 VALUES ($1, 'open', $2, $2, $3)
+                 RETURNING id`,
+                [table_id, newItemsTotal, notes || null]
+            );
+            orderId = newOrderResult.rows[0].id;
+
+            const newSessionResult = await query(
+                `INSERT INTO table_sessions (table_id, order_id, status)
+                 VALUES ($1, $2, 'active')
+                 RETURNING id`,
+                [table_id, orderId]
+            );
+            sessionId = newSessionResult.rows[0].id;
+
+            // Update order with session_id
+            await query(
+                'UPDATE orders SET session_id = $1 WHERE id = $2',
+                [sessionId, orderId]
             );
         }
 
-        // Emit socket event for real-time update
+        // 2. Create kitchen ticket for this batch
+        const ticketResult = await query(
+            `INSERT INTO kitchen_tickets (order_id, ticket_number, status, note)
+             VALUES ($1, $2, 'pending', $3)
+             RETURNING id`,
+            [orderId, ticketNumber, notes || null]
+        );
+        const ticketId = ticketResult.rows[0].id;
+
+        // 3. Insert order items and link to ticket
+        for (const item of items) {
+            const price = priceMap.get(item.product_id) || 0;
+
+            // Insert order item
+            const orderItemResult = await query(
+                `INSERT INTO order_items (order_id, product_id, quantity, unit_price, note)
+                 VALUES ($1, $2, $3, $4, $5)
+                 RETURNING id`,
+                [orderId, item.product_id, item.quantity, price, item.notes || null]
+            );
+            const orderItemId = orderItemResult.rows[0].id;
+
+            // Link to kitchen ticket
+            await query(
+                `INSERT INTO kitchen_ticket_items (ticket_id, order_item_id, quantity)
+                 VALUES ($1, $2, $3)`,
+                [ticketId, orderItemId, item.quantity]
+            );
+        }
+
+        // 4. Emit socket event for real-time update (kitchen display)
         const io = req.app.get('io');
         if (io) {
             io.emit('order:new', {
                 order_id: orderId,
+                ticket_id: ticketId,
+                ticket_number: ticketNumber,
                 table_id,
+                session_id: sessionId,
                 from_customer: true
             });
         }
@@ -290,6 +420,9 @@ customerRouter.post('/order', async (req, res) => {
         res.json({
             success: true,
             order_id: orderId,
+            session_id: sessionId,
+            ticket_id: ticketId,
+            ticket_number: ticketNumber,
             message: 'Đã gửi đơn hàng!'
         });
     } catch (error) {

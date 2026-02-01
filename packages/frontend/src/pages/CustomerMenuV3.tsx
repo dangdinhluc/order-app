@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, ShoppingCart, Plus, Minus, X, Bell, Menu,
-    Loader2, Sparkles, Flame, Star
+    Loader2, Sparkles, Flame, Star, Clock
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -41,6 +41,36 @@ interface QuickNote {
     id: string;
     label: string;
     price_modifier: number;
+}
+
+interface OrderItem {
+    id: string;
+    product_id: string;
+    product_name: string;
+    quantity: number;
+    unit_price: number;
+    note: string;
+}
+
+interface KitchenTicket {
+    ticket_id: string;
+    ticket_number: number;
+    sent_at: string;
+    status: 'pending' | 'cooking' | 'served' | 'cancelled';
+    items: OrderItem[];
+}
+
+interface CurrentOrder {
+    id: string;
+    total: number;
+    status: string;
+    tickets: KitchenTicket[];
+}
+
+interface TableSession {
+    id: string;
+    order_id: string;
+    started_at: string;
 }
 
 interface SlideshowImage {
@@ -144,6 +174,10 @@ export default function CustomerMenuV3() {
     const [branding, setBranding] = useState({ name: 'GIA VỊ', slogan: 'Hương vị Việt', icon: '🍜' });
 
     const [loading, setLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [tableSession, setTableSession] = useState<TableSession | null>(null);
+    const [currentOrder, setCurrentOrder] = useState<CurrentOrder | null>(null);
+    const [showHistory, setShowHistory] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -211,6 +245,8 @@ export default function CustomerMenuV3() {
             setFeatured(data.featured || []);
             setSlideshow(data.slideshow || []);
             setQuickNotes(data.quickNotes || {});
+            setTableSession(data.active_session);
+            setCurrentOrder(data.current_order);
 
             if (data.categories?.length > 0) {
                 setSelectedCategory(data.categories[0].id);
@@ -302,6 +338,42 @@ export default function CustomerMenuV3() {
         setProductNotes([]);
     };
 
+    const handleOrder = async () => {
+        if (!tableId || cart.length === 0) return;
+        setIsSubmitting(true);
+
+        const items = cart.map(item => ({
+            product_id: item.product.id,
+            quantity: item.quantity,
+            notes: item.notes.join(', ')
+        }));
+
+        try {
+            const res = await fetch(`${API_BASE}/api/customer/order`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    table_id: tableId,
+                    items,
+                    notes: '' // Optional general note
+                })
+            });
+
+            if (!res.ok) throw new Error('Failed to create order');
+
+            // Success
+            setCart([]);
+            setShowCart(false);
+            alert(language === 'vi' ? 'Đã gửi đơn hàng thành công!' : language === 'jp' ? '注文が送信されました！' : '订单已发送！');
+            fetchMenu(); // Refresh to get updated session
+        } catch (err) {
+            console.error(err);
+            alert(language === 'vi' ? 'Lỗi gửi đơn hàng!' : language === 'jp' ? '注文の送信に失敗しました！' : '发送订单失败！');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const scrollToCategory = (categoryId: string) => {
         setShowCategoryMenu(false);
         const element = document.getElementById(`category-${categoryId}`);
@@ -323,6 +395,9 @@ export default function CustomerMenuV3() {
     // Cart total now includes notesPriceModifier (topping prices)
     const cartTotal = cart.reduce((sum, item) => sum + (item.product.price + item.notesPriceModifier) * item.quantity, 0);
     const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+    // History Total (from current order session)
+    const historyTotal = currentOrder?.total || 0;
 
     const filteredCategories = categories.map(cat => ({
         ...cat,
@@ -619,6 +694,21 @@ export default function CustomerMenuV3() {
                                 className="w-10 h-10 rounded-xl bg-white/10 hover:bg-rose-500/20 flex items-center justify-center transition-colors border border-white/5 text-rose-400"
                             >
                                 <Bell className="w-5 h-5" />
+                            </motion.button>
+
+                            {/* History Button */}
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setShowHistory(true)}
+                                className="w-10 h-10 rounded-xl bg-white/10 hover:bg-blue-500/20 flex items-center justify-center transition-colors border border-white/5 text-blue-400 relative"
+                            >
+                                <Clock className="w-5 h-5" />
+                                {currentOrder && currentOrder.tickets.length > 0 && (
+                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                                        {currentOrder.tickets.length}
+                                    </span>
+                                )}
                             </motion.button>
 
                             {/* Language Button */}
@@ -1033,9 +1123,18 @@ export default function CustomerMenuV3() {
                                     <motion.button
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
-                                        className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl font-bold text-lg text-black shadow-lg shadow-amber-500/30"
+                                        onClick={handleOrder}
+                                        disabled={isSubmitting}
+                                        className={`w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl font-bold text-lg text-black flex items-center justify-center gap-2 shadow-lg shadow-amber-500/30 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                                     >
-                                        {t.order}
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                <span>{language === 'vi' ? 'Đang gửi...' : t.loading}</span>
+                                            </>
+                                        ) : (
+                                            t.order
+                                        )}
                                     </motion.button>
                                 </div>
                             )}
@@ -1101,6 +1200,109 @@ export default function CustomerMenuV3() {
                             >
                                 {language === 'vi' ? 'Đóng' : language === 'jp' ? '閉じる' : '关闭'}
                             </motion.button>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            {/* History Modal */}
+            <AnimatePresence>
+                {showHistory && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowHistory(false)}
+                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-md bg-stone-900 rounded-3xl z-50 p-6 border border-white/10 shadow-2xl max-h-[80vh] flex flex-col"
+                        >
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                    <Clock className="w-5 h-5 text-blue-400" />
+                                    {language === 'vi' ? 'Đã gọi' : language === 'jp' ? '注文履歴' : '已点餐'}
+                                </h2>
+                                <button onClick={() => setShowHistory(false)} className="p-2 rounded-full hover:bg-white/10 text-white">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto pr-2 space-y-6">
+                                {!currentOrder || currentOrder.tickets.length === 0 ? (
+                                    <div className="text-center py-10 text-white/40">
+                                        {t.emptyCart}
+                                    </div>
+                                ) : (
+                                    currentOrder.tickets.map(ticket => (
+                                        <div key={ticket.ticket_id} className="border-b border-white/10 pb-4 last:border-0 last:pb-0">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <span className="text-xs text-white/40">
+                                                    #{ticket.ticket_number} - {new Date(ticket.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${ticket.status === 'served' ? 'bg-green-500/20 text-green-400' :
+                                                    ticket.status === 'cooking' ? 'bg-amber-500/20 text-amber-400' :
+                                                        'bg-blue-500/20 text-blue-400'
+                                                    }`}>
+                                                    {ticket.status === 'served' ? (language === 'vi' ? 'Đã phục vụ' : 'Served') :
+                                                        ticket.status === 'cooking' ? (language === 'vi' ? 'Đang chế biến' : 'Cooking') :
+                                                            (language === 'vi' ? 'Đang chờ' : 'Pending')}
+                                                </span>
+                                            </div>
+                                            <div className="space-y-3">
+                                                {ticket.items.map(item => (
+                                                    <div key={item.id} className="flex justify-between items-start">
+                                                        <div>
+                                                            <div className="text-white font-medium">
+                                                                <span className="text-amber-400 font-bold mr-2">{item.quantity}x</span>
+                                                                {item.product_name}
+                                                            </div>
+                                                            {item.note && (
+                                                                <div className="text-xs text-white/50 mt-0.5">{item.note}</div>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-white/80">
+                                                            ¥{(item.unit_price * item.quantity).toLocaleString()}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {currentOrder && currentOrder.tickets.length > 0 && (
+                                <div className="mt-6 pt-4 border-t border-white/10">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-white/60">{language === 'vi' ? 'Tạm tính' : 'Total'}</span>
+                                        <span className="text-2xl font-bold text-amber-400">¥{historyTotal.toLocaleString()}</span>
+                                    </div>
+                                    {/* Payment Button Suggestion */}
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={async () => {
+                                            try {
+                                                await fetch(`${API_BASE}/api/customer/call-service`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ table_id: tableId, type: 'bill' })
+                                                });
+                                                alert(language === 'vi' ? 'Đã gọi thanh toán!' : 'Payment requested!');
+                                                setShowHistory(false);
+                                            } catch { }
+                                        }}
+                                        className="w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold text-white transition-colors"
+                                    >
+                                        {t.payment}
+                                    </motion.button>
+                                </div>
+                            )}
                         </motion.div>
                     </>
                 )}
