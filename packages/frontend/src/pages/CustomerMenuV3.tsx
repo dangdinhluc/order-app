@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Search, ShoppingCart, Plus, Minus, X, Bell,
+    Search, ShoppingCart, Plus, Minus, X, Bell, Menu,
     Loader2, Sparkles, Flame, Star
 } from 'lucide-react';
 
@@ -34,6 +34,7 @@ interface CartItem {
     product: Product;
     quantity: number;
     notes: string[];
+    notesPriceModifier: number; // Total price modifier from selected toppings
 }
 
 interface QuickNote {
@@ -139,6 +140,8 @@ export default function CustomerMenuV3() {
     const [slideshow, setSlideshow] = useState<SlideshowImage[]>([]);
     const [quickNotes, setQuickNotes] = useState<Record<string, QuickNote[]>>({});
     const [table, setTable] = useState<{ id: string; number: number; name: string } | null>(null);
+    // Branding from admin settings
+    const [branding, setBranding] = useState({ name: 'GIA VỊ', slogan: 'Hương vị Việt', icon: '🍜' });
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -151,8 +154,10 @@ export default function CustomerMenuV3() {
     const [currentSlide, setCurrentSlide] = useState(0);
     const [productQuantity, setProductQuantity] = useState(1);
     const [productNotes, setProductNotes] = useState<string[]>([]);
+    const [showCategoryMenu, setShowCategoryMenu] = useState(false);
+    const [flyingItems, setFlyingItems] = useState<{ id: number; x: number; y: number; image?: string }[]>([]);
 
-    const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastActivityRef = useRef<number>(Date.now());
 
     const resetIdleTimer = useCallback(() => {
@@ -210,6 +215,14 @@ export default function CustomerMenuV3() {
             if (data.categories?.length > 0) {
                 setSelectedCategory(data.categories[0].id);
             }
+            // Set branding from settings
+            if (data.settings) {
+                setBranding({
+                    name: data.settings.brand_name || 'GIA VỊ',
+                    slogan: data.settings.brand_slogan || 'Hương vị Việt',
+                    icon: data.settings.brand_icon || '🍜'
+                });
+            }
         } catch (err) {
             setError((err as Error).message);
         } finally {
@@ -236,21 +249,65 @@ export default function CustomerMenuV3() {
         resetIdleTimer();
     };
 
-    const addToCart = (product: Product, quantity: number, notes: string[]) => {
-        setCart(prev => {
-            const existing = prev.find(item => item.product.id === product.id);
-            if (existing) {
-                return prev.map(item =>
-                    item.product.id === product.id
-                        ? { ...item, quantity: item.quantity + quantity, notes: [...item.notes, ...notes] }
-                        : item
-                );
+    const addToCart = (product: Product, quantity: number, notes: string[], notesPriceModifier: number = 0, e?: React.MouseEvent | { clientX: number, clientY: number }) => {
+        if (e) {
+            const id = Date.now();
+            // @ts-ignore
+            const { clientX, clientY } = e.clientX ? e : (e.touches?.[0] || {});
+            if (clientX) {
+                setFlyingItems(prev => [...prev, { id, x: clientX, y: clientY, image: product.image_url }]);
+                setTimeout(() => {
+                    setFlyingItems(prev => prev.filter(item => item.id !== id));
+                    setCart(prev => {
+                        const existing = prev.find(item => item.product.id === product.id && JSON.stringify(item.notes.sort()) === JSON.stringify(notes.sort()));
+                        if (existing) {
+                            return prev.map(item =>
+                                item.product.id === product.id && JSON.stringify(item.notes.sort()) === JSON.stringify(notes.sort())
+                                    ? { ...item, quantity: item.quantity + quantity }
+                                    : item
+                            );
+                        }
+                        return [...prev, { product, quantity, notes, notesPriceModifier }];
+                    });
+                }, 800); // Animation duration
+            } else {
+                setCart(prev => {
+                    const existing = prev.find(item => item.product.id === product.id && JSON.stringify(item.notes.sort()) === JSON.stringify(notes.sort()));
+                    if (existing) {
+                        return prev.map(item =>
+                            item.product.id === product.id && JSON.stringify(item.notes.sort()) === JSON.stringify(notes.sort())
+                                ? { ...item, quantity: item.quantity + quantity }
+                                : item
+                        );
+                    }
+                    return [...prev, { product, quantity, notes, notesPriceModifier }];
+                });
             }
-            return [...prev, { product, quantity, notes }];
-        });
+        } else {
+            setCart(prev => {
+                const existing = prev.find(item => item.product.id === product.id && JSON.stringify(item.notes.sort()) === JSON.stringify(notes.sort()));
+                if (existing) {
+                    return prev.map(item =>
+                        item.product.id === product.id && JSON.stringify(item.notes.sort()) === JSON.stringify(notes.sort())
+                            ? { ...item, quantity: item.quantity + quantity }
+                            : item
+                    );
+                }
+                return [...prev, { product, quantity, notes, notesPriceModifier }];
+            });
+        }
+
         setSelectedProduct(null);
         setProductQuantity(1);
         setProductNotes([]);
+    };
+
+    const scrollToCategory = (categoryId: string) => {
+        setShowCategoryMenu(false);
+        const element = document.getElementById(`category-${categoryId}`);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth' });
+        }
     };
 
     const updateCartQuantity = (productId: string, delta: number) => {
@@ -263,7 +320,8 @@ export default function CustomerMenuV3() {
         }).filter(item => item.quantity > 0));
     };
 
-    const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+    // Cart total now includes notesPriceModifier (topping prices)
+    const cartTotal = cart.reduce((sum, item) => sum + (item.product.price + item.notesPriceModifier) * item.quantity, 0);
     const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
     const filteredCategories = categories.map(cat => ({
@@ -454,96 +512,126 @@ export default function CustomerMenuV3() {
                 <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-orange-600/15 rounded-full blur-[120px]" />
             </div>
 
-            {/* Sidebar */}
-            <div className="w-28 md:w-36 shrink-0 flex flex-col py-4 px-2 relative z-10 border-r border-white/5">
-                {/* Language Switch */}
+            {/* Main Content Layout */}
+            <div className="flex flex-col h-full relative z-10 w-full transition-all duration-300">
+
+                {/* FLOATING MENU BUTTON (Middle Left Edge - Premium Glass Tab) */}
                 <motion.button
-                    whileHover={{ scale: 1.05 }}
+                    className="fixed left-0 top-1/2 -translate-y-1/2 z-40 py-4 px-2 rounded-r-xl bg-stone-900/80 backdrop-blur-xl border-y border-r border-amber-500/30 shadow-xl shadow-amber-500/10 flex items-center justify-center hover:bg-stone-800 hover:border-amber-400/50 transition-all group"
+                    onClick={() => setShowCategoryMenu(true)}
+                    whileHover={{ x: 3, boxShadow: "0 0 15px rgba(245,158,11,0.3)" }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() => setAppState('language')}
-                    className="mx-auto mb-6 w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center text-2xl border border-white/10 hover:border-amber-400/50 transition-colors"
                 >
-                    {LANG_LABELS[language].flag}
+                    <Menu className="w-5 h-5 text-amber-400 group-hover:text-amber-300" />
                 </motion.button>
 
-                {/* Categories */}
-                <div className="flex-1 overflow-y-auto space-y-2 no-scrollbar">
-                    {categories.map((cat, i) => (
-                        <motion.button
-                            key={cat.id}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: i * 0.05 }}
-                            onClick={() => setSelectedCategory(cat.id)}
-                            className={`w-full p-3 rounded-2xl transition-all duration-300 ${selectedCategory === cat.id
-                                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-black shadow-lg shadow-amber-500/30'
-                                    : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
-                                }`}
-                        >
-                            <div className="text-2xl mb-1">{cat.icon || '🍴'}</div>
-                            <div className="text-[10px] md:text-xs font-medium line-clamp-2 leading-tight">
-                                {cat.name}
-                            </div>
-                        </motion.button>
-                    ))}
-                </div>
-
-                {/* Quick Actions */}
-                <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowQuickActions(true)}
-                    className="mt-4 mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 flex items-center justify-center text-white shadow-lg shadow-rose-500/30"
-                >
-                    <Bell className="w-6 h-6" />
-                </motion.button>
-            </div>
-
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col overflow-hidden relative z-10">
-                {/* Header */}
-                <div className="px-6 py-4 flex items-center gap-4">
-                    {/* Search */}
-                    <div className="flex-1 relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
-                        <input
-                            type="text"
-                            placeholder={t.search}
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full pl-12 pr-4 py-4 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 focus:border-amber-400/50 outline-none text-white placeholder-white/40 transition-colors"
-                        />
-                    </div>
-
-                    {/* Table Badge */}
-                    {table && (
-                        <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full">
-                            <span className="text-amber-400 text-sm">{t.table}</span>
-                            <span className="text-white font-bold">{table.number || table.name}</span>
-                        </div>
+                {/* CATEGORY DRAWER */}
+                <AnimatePresence>
+                    {showCategoryMenu && (
+                        <>
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setShowCategoryMenu(false)}
+                                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+                            />
+                            <motion.div
+                                initial={{ x: '-100%' }}
+                                animate={{ x: 0 }}
+                                exit={{ x: '-100%' }}
+                                transition={{ type: 'tween', duration: 0.2, ease: 'easeOut' }}
+                                className="fixed left-0 top-0 bottom-0 w-64 bg-stone-900 border-r border-white/10 z-50 flex flex-col p-4 shadow-2xl"
+                            >
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-xl font-bold text-white pl-2">Thực đơn</h2>
+                                    <button onClick={() => setShowCategoryMenu(false)} className="p-2 rounded-full hover:bg-white/10 text-white">
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto no-scrollbar">
+                                    <div className="flex flex-wrap gap-2 p-2">
+                                        {categories.map(cat => (
+                                            <motion.button
+                                                key={cat.id}
+                                                onClick={() => scrollToCategory(cat.id)}
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                                className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/30 hover:border-amber-400/60 hover:from-amber-500/30 hover:to-orange-500/30 text-white transition-all duration-300 shadow-md hover:shadow-lg hover:shadow-amber-500/20"
+                                            >
+                                                <span className="text-xl">{cat.icon || '🍴'}</span>
+                                                <span className="font-medium text-sm">{cat.name}</span>
+                                                <span className="ml-1 px-2 py-0.5 rounded-full bg-white/20 text-xs font-bold text-amber-200">
+                                                    {cat.products?.length || 0}
+                                                </span>
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+                                {/* Quick Actions in Drawer too */}
+                                <div className="mt-4 pt-4 border-t border-white/10">
+                                    <button
+                                        onClick={() => { setShowCategoryMenu(false); setShowQuickActions(true); }}
+                                        className="w-full p-3 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 text-white font-bold flex items-center justify-center gap-2"
+                                    >
+                                        <Bell className="w-5 h-5" />
+                                        {t.callStaff}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </>
                     )}
+                </AnimatePresence>
+                {/* Header with glowing border - Single Row */}
+                <div className="px-4 md:px-6 py-4">
+                    <div className="flex items-center gap-3 p-2.5 rounded-2xl border-2 border-amber-500/40 bg-gradient-to-r from-amber-950/60 via-stone-900/80 to-amber-950/60 backdrop-blur-xl shadow-lg shadow-amber-500/20">
+                        {/* Left: Logo */}
+                        <div className="flex items-center gap-2 shrink-0">
+                            <motion.div
+                                className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/30"
+                                animate={{ rotate: [0, 5, -5, 0] }}
+                                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                            >
+                                <span className="text-xl">{branding.icon}</span>
+                            </motion.div>
+                            <span className="hidden sm:block text-amber-400 font-bold text-sm leading-tight">{branding.name}<br /><span className="text-[10px] text-white/50 font-normal">{branding.slogan}</span></span>
+                        </div>
 
-                    {/* Cart Button */}
-                    <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => setShowCart(true)}
-                        className="relative p-4 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl flex items-center gap-3 shadow-lg shadow-amber-500/30"
-                    >
-                        <ShoppingCart className="w-6 h-6 text-black" />
-                        {cartCount > 0 && (
-                            <>
-                                <span className="text-black font-bold">{cartCount}</span>
-                                <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full text-white text-xs flex items-center justify-center font-bold"
-                                >
-                                    {cartCount}
-                                </motion.div>
-                            </>
-                        )}
-                    </motion.button>
+                        {/* Middle: Search */}
+                        <div className="flex-1 relative mx-2">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                            <input
+                                type="text"
+                                placeholder={t.search}
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="w-full pl-10 pr-3 py-2.5 bg-white/10 backdrop-blur-sm rounded-xl border border-white/10 focus:border-amber-400/50 outline-none text-white placeholder-white/40 transition-colors text-sm"
+                            />
+                        </div>
+
+                        {/* Right: Actions */}
+                        <div className="flex items-center gap-2 shrink-0">
+                            {/* Call Staff */}
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setShowQuickActions(true)}
+                                className="w-10 h-10 rounded-xl bg-white/10 hover:bg-rose-500/20 flex items-center justify-center transition-colors border border-white/5 text-rose-400"
+                            >
+                                <Bell className="w-5 h-5" />
+                            </motion.button>
+
+                            {/* Language Button */}
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setAppState('language')}
+                                className="w-10 h-10 rounded-xl bg-white/10 hover:bg-amber-500/20 flex items-center justify-center transition-colors border border-white/5 text-xl"
+                            >
+                                {LANG_LABELS[language].flag}
+                            </motion.button>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Content */}
@@ -587,9 +675,9 @@ export default function CustomerMenuV3() {
                                             {/* Badge */}
                                             {product.featured_badge && (
                                                 <div className={`absolute top-3 left-3 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 ${product.featured_badge === 'hot' ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white' :
-                                                        product.featured_badge === 'new' ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white' :
-                                                            product.featured_badge === 'chef' ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-black' :
-                                                                'bg-gradient-to-r from-blue-500 to-indigo-500 text-white'
+                                                    product.featured_badge === 'new' ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white' :
+                                                        product.featured_badge === 'chef' ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-black' :
+                                                            'bg-gradient-to-r from-blue-500 to-indigo-500 text-white'
                                                     }`}>
                                                     {product.featured_badge === 'hot' && <Flame className="w-3 h-3" />}
                                                     {product.featured_badge === 'chef' && <Star className="w-3 h-3" />}
@@ -612,7 +700,7 @@ export default function CustomerMenuV3() {
                                                     whileTap={{ scale: 0.9 }}
                                                     onClick={e => {
                                                         e.stopPropagation();
-                                                        addToCart(product, 1, []);
+                                                        addToCart(product, 1, [], 0, e);
                                                     }}
                                                     className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center text-black shadow-lg"
                                                 >
@@ -630,71 +718,79 @@ export default function CustomerMenuV3() {
                     {filteredCategories.map(cat => (
                         <div
                             key={cat.id}
-                            className={`mb-8 ${selectedCategory === cat.id ? '' : 'hidden md:block'}`}
+                            id={`category-${cat.id}`}
+                            className={`mb-10 ${selectedCategory === cat.id ? '' : 'hidden md:block'}`}
                         >
-                            <div className="flex items-center gap-3 mb-5">
-                                <span className="text-2xl">{cat.icon || '🍴'}</span>
-                                <h2 className="text-xl font-semibold text-white">{cat.name}</h2>
-                                <span className="text-white/40 text-sm">({cat.products.length})</span>
+                            {/* Category Header - Centered with Gradient Lines */}
+                            <div className="flex items-center justify-center gap-6 mb-8">
+                                <div className="flex-1 h-0.5 bg-gradient-to-r from-transparent via-amber-400/70 to-amber-500/40 rounded-full" />
+                                <h2 className="text-xl md:text-2xl font-bold text-amber-100 tracking-[0.2em] uppercase px-2">
+                                    {cat.name}
+                                </h2>
+                                <div className="flex-1 h-0.5 bg-gradient-to-l from-transparent via-amber-400/70 to-amber-500/40 rounded-full" />
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                 {cat.products.map((product, i) => (
                                     <motion.div
                                         key={product.id}
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: i * 0.03 }}
-                                        whileHover={{ y: -5 }}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ duration: 0.15 }}
                                         whileTap={{ scale: 0.98 }}
                                         onClick={() => {
                                             setSelectedProduct(product);
                                             setProductQuantity(1);
                                             setProductNotes([]);
                                         }}
-                                        className="group rounded-2xl overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10 hover:border-amber-400/30 cursor-pointer transition-all duration-300"
+                                        className="group relative rounded-2xl overflow-hidden bg-stone-900 border border-white/10 cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-[0_0_20px_rgba(245,158,11,0.25)] will-change-transform"
                                     >
-                                        {/* Image */}
-                                        <div className="aspect-square relative overflow-hidden">
+                                        {/* Image Container */}
+                                        <div className="aspect-[4/5] relative overflow-hidden">
                                             {product.image_url ? (
                                                 <img
                                                     src={getImageUrl(product.image_url)!}
                                                     alt={product.name}
-                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                                 />
                                             ) : (
-                                                <div className="w-full h-full bg-gradient-to-br from-stone-700 to-stone-800 flex items-center justify-center text-4xl">🍜</div>
+                                                <div className="w-full h-full bg-gradient-to-br from-stone-700 to-stone-800 flex items-center justify-center text-5xl">🍜</div>
                                             )}
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-                                            {/* Quick Add Button */}
-                                            <motion.button
-                                                initial={{ scale: 0 }}
-                                                whileHover={{ scale: 1.1 }}
-                                                className="absolute bottom-3 right-3 w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center text-black shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                                                onClick={e => {
-                                                    e.stopPropagation();
-                                                    addToCart(product, 1, []);
-                                                }}
-                                            >
-                                                <Plus className="w-5 h-5" />
-                                            </motion.button>
+                                            {/* Gradient Overlay - always visible for text readability */}
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-                                            {/* Badges */}
+                                            {/* Price Badge - Top Right */}
+                                            <div className="absolute top-2 right-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-black text-sm font-bold shadow-lg shadow-amber-500/30">
+                                                ¥{product.price.toLocaleString()}
+                                            </div>
+
+                                            {/* HOT Badge - Top Left */}
                                             {product.is_best_seller && (
-                                                <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-gradient-to-r from-red-500 to-orange-500 text-white text-[10px] font-bold flex items-center gap-1">
+                                                <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-gradient-to-r from-red-600 to-rose-500 text-white text-[10px] font-bold flex items-center gap-1 shadow-lg">
                                                     <Flame className="w-3 h-3" /> HOT
                                                 </div>
                                             )}
-                                        </div>
 
-                                        {/* Info */}
-                                        <div className="p-3">
-                                            <h3 className="text-white text-sm font-medium mb-1 line-clamp-2 leading-tight group-hover:text-amber-200 transition-colors">
-                                                {product.name}
-                                            </h3>
-                                            <p className="text-amber-400 font-bold">
-                                                ¥{product.price.toLocaleString()}
-                                            </p>
+                                            {/* Text Overlay with Glass Effect - Bottom */}
+                                            <div className="absolute bottom-0 left-0 right-0 p-3 bg-black/40 backdrop-blur-md border-t border-white/10">
+                                                <h3 className="text-white text-base font-bold mb-0.5 line-clamp-1 group-hover:text-amber-200 transition-colors">
+                                                    {product.name}
+                                                </h3>
+                                                {product.description && (
+                                                    <p className="text-white/50 text-xs line-clamp-1">{product.description}</p>
+                                                )}
+                                            </div>
+
+                                            {/* Quick Add Button - Always Visible */}
+                                            <button
+                                                className="absolute bottom-14 right-2 w-11 h-11 rounded-full bg-amber-500 flex items-center justify-center text-black shadow-lg shadow-amber-500/40 hover:bg-amber-400 active:scale-95 transition-all"
+                                                onClick={e => {
+                                                    e.stopPropagation();
+                                                    addToCart(product, 1, [], 0, e);
+                                                }}
+                                            >
+                                                <Plus className="w-6 h-6" strokeWidth={2.5} />
+                                            </button>
                                         </div>
                                     </motion.div>
                                 ))}
@@ -716,9 +812,10 @@ export default function CustomerMenuV3() {
                             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
                         />
                         <motion.div
-                            initial={{ opacity: 0, y: 100, scale: 0.9 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 100, scale: 0.9 }}
+                            initial={{ opacity: 0, y: 50 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 50 }}
+                            transition={{ type: 'tween', duration: 0.2, ease: 'easeOut' }}
                             className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl bg-gradient-to-b from-stone-800 to-stone-900 rounded-3xl z-50 overflow-hidden flex flex-col border border-white/10 shadow-2xl"
                         >
                             {/* Close */}
@@ -772,8 +869,8 @@ export default function CustomerMenuV3() {
                                                         );
                                                     }}
                                                     className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${productNotes.includes(note.label)
-                                                            ? 'bg-amber-500 text-black'
-                                                            : 'bg-white/10 text-white/70 border border-white/20 hover:border-amber-400/50'
+                                                        ? 'bg-amber-500 text-black'
+                                                        : 'bg-white/10 text-white/70 border border-white/20 hover:border-amber-400/50'
                                                         }`}
                                                 >
                                                     {note.label}
@@ -818,11 +915,18 @@ export default function CustomerMenuV3() {
                                 <motion.button
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    onClick={() => addToCart(selectedProduct, productQuantity, productNotes)}
+                                    onClick={(e) => {
+                                        const modifierTotal = quickNotes[selectedProduct.id]?.filter(n => productNotes.includes(n.label)).reduce((sum, n) => sum + n.price_modifier, 0) || 0;
+                                        addToCart(selectedProduct, productQuantity, productNotes, modifierTotal, e);
+                                    }}
                                     className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl font-bold text-lg text-black flex items-center justify-center gap-3 shadow-lg shadow-amber-500/30"
                                 >
                                     <ShoppingCart className="w-5 h-5" />
-                                    {t.addToCart} • ¥{(selectedProduct.price * productQuantity).toLocaleString()}
+                                    {t.addToCart} • ¥{(() => {
+                                        const basePrice = selectedProduct.price * productQuantity;
+                                        const modifierTotal = quickNotes[selectedProduct.id]?.filter(n => productNotes.includes(n.label)).reduce((sum, n) => sum + n.price_modifier, 0) || 0;
+                                        return ((basePrice + modifierTotal * productQuantity)).toLocaleString();
+                                    })()}
                                 </motion.button>
                             </div>
                         </motion.div>
@@ -845,7 +949,7 @@ export default function CustomerMenuV3() {
                             initial={{ x: '100%' }}
                             animate={{ x: 0 }}
                             exit={{ x: '100%' }}
-                            transition={{ type: 'spring', damping: 25 }}
+                            transition={{ type: 'tween', duration: 0.2, ease: 'easeOut' }}
                             className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-gradient-to-b from-stone-800 to-stone-900 z-50 flex flex-col border-l border-white/10"
                         >
                             {/* Header */}
@@ -986,6 +1090,8 @@ export default function CustomerMenuV3() {
                                         <span className="text-sm text-white/80">{action.label}</span>
                                     </motion.button>
                                 ))}
+
+
                             </div>
                             <motion.button
                                 whileHover={{ scale: 1.02 }}
@@ -999,6 +1105,84 @@ export default function CustomerMenuV3() {
                     </>
                 )}
             </AnimatePresence>
+
+            {/* Floating Cart Button - Bottom Right - Premium Glass Style */}
+            <motion.button
+                layoutId="cart-button"
+                className="fixed bottom-6 right-6 w-16 h-16 rounded-full bg-stone-900/90 backdrop-blur-xl flex items-center justify-center text-amber-400 shadow-xl shadow-amber-500/20 border-2 border-amber-500/50 z-50 overflow-visible"
+                onClick={() => setShowCart(true)}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                animate={{
+                    boxShadow: ["0 0 0px rgba(245, 158, 11, 0.2)", "0 0 20px rgba(245, 158, 11, 0.4)", "0 0 0px rgba(245, 158, 11, 0.2)"]
+                }}
+                transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    repeatType: "reverse"
+                }}
+            >
+                {/* Steam Animation */}
+                <motion.span
+                    className="absolute -top-2 left-1/2 -translate-x-1/2 text-xs opacity-60"
+                    animate={{ y: [-2, -8, -2], opacity: [0.4, 0.7, 0.4] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                >
+                    ♨️
+                </motion.span>
+                <motion.span
+                    className="absolute -top-1 left-1/3 text-[10px] opacity-40"
+                    animate={{ y: [0, -6, 0], opacity: [0.3, 0.6, 0.3] }}
+                    transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}
+                >
+                    ♨️
+                </motion.span>
+                <motion.span
+                    className="absolute -top-1 right-1/3 text-[10px] opacity-40"
+                    animate={{ y: [0, -5, 0], opacity: [0.2, 0.5, 0.2] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
+                >
+                    ♨️
+                </motion.span>
+                {/* Bowl Emoji - Larger */}
+                <span className="text-3xl">🍜</span>
+                {cartCount > 0 && (
+                    <motion.div
+                        key={cartCount}
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="absolute -top-1 -right-1 w-6 h-6 bg-red-600 rounded-full text-white text-xs flex items-center justify-center font-bold border-2 border-stone-900 shadow-sm"
+                    >
+                        {cartCount}
+                    </motion.div>
+                )}
+            </motion.button>
+
+            {/* FLYING ANIMATION */}
+            <AnimatePresence>
+                {flyingItems.map(item => (
+                    <motion.div
+                        key={item.id}
+                        initial={{ opacity: 1, x: item.x, y: item.y, scale: 1, rotate: 0 }}
+                        animate={{
+                            opacity: 0,
+                            x: window.innerWidth - 48, // Bottom-right cart position
+                            y: window.innerHeight - 48,
+                            scale: 0.2,
+                            rotate: 360
+                        }}
+                        transition={{ duration: 0.8, ease: "easeInOut" }}
+                        className="fixed z-[60] pointer-events-none w-12 h-12 rounded-full overflow-hidden border-2 border-amber-500 shadow-xl"
+                    >
+                        {item.image ? (
+                            <img src={getImageUrl(item.image)!} className="w-full h-full object-cover" alt="" />
+                        ) : (
+                            <div className="w-full h-full bg-amber-500 flex items-center justify-center">🍜</div>
+                        )}
+                    </motion.div>
+                ))}
+            </AnimatePresence>
+
         </div>
     );
 }

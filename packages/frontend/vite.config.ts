@@ -7,13 +7,14 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
+    host: '0.0.0.0', // Allow external access
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://192.168.128.159:3001',
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://localhost:3001',
+        target: 'http://192.168.128.159:3001',
         ws: true,
       },
     },

@@ -1,4 +1,4 @@
-import { Store, Globe } from 'lucide-react';
+import { Store, Globe, Sparkles } from 'lucide-react';
 
 interface StoreSettings {
     store_name: string;
@@ -9,6 +9,10 @@ interface StoreSettings {
     currency: string;
     language: string;
     timezone: string;
+    // Branding settings for Customer Menu
+    brand_name: string;
+    brand_slogan: string;
+    brand_icon: string;
 }
 
 interface Props {
@@ -27,6 +31,10 @@ export default function GeneralSettings({ settings, onChange }: Props) {
         currency: 'JPY',
         language: 'vi',
         timezone: 'Asia/Tokyo',
+        // Branding defaults
+        brand_name: 'GIA VỊ',
+        brand_slogan: 'Hương vị Việt',
+        brand_icon: '🍜',
     };
 
     const handleChange = (key: keyof StoreSettings, value: any) => {
@@ -90,6 +98,51 @@ export default function GeneralSettings({ settings, onChange }: Props) {
                         onChange={(e) => handleChange('tax_rate', Number(e.target.value))}
                         className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
+                </div>
+            </div>
+
+            <hr className="border-slate-100" />
+
+            {/* Branding Section for Customer Menu */}
+            <div>
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-2">
+                    <Sparkles className="text-amber-500" size={24} />
+                    Thương hiệu (Customer Menu)
+                </h3>
+                <p className="text-slate-500 mb-6">Tên quán, khẩu hiệu và icon hiển thị trên menu khách hàng</p>
+
+                <div className="grid md:grid-cols-3 gap-6">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Tên quán</label>
+                        <input
+                            type="text"
+                            value={data.brand_name}
+                            onChange={(e) => handleChange('brand_name', e.target.value)}
+                            placeholder="GIA VỊ"
+                            className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Khẩu hiệu</label>
+                        <input
+                            type="text"
+                            value={data.brand_slogan}
+                            onChange={(e) => handleChange('brand_slogan', e.target.value)}
+                            placeholder="Hương vị Việt"
+                            className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Icon (Emoji)</label>
+                        <input
+                            type="text"
+                            value={data.brand_icon}
+                            onChange={(e) => handleChange('brand_icon', e.target.value)}
+                            placeholder="🍜"
+                            className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none text-2xl text-center"
+                        />
+                        <p className="text-xs text-slate-400 mt-1">Nhập 1 emoji (🍜, 🍛, 🍕...)</p>
+                    </div>
                 </div>
             </div>
 

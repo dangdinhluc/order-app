@@ -100,6 +100,25 @@ router.put('/', requireRole('owner'), async (req: AuthRequest, res: Response, ne
                     updated_by = EXCLUDED.updated_by,
                     updated_at = NOW()
             `, [key, valueStr, userId]);
+
+            // Special handling: When store_settings is saved, also save brand_ keys separately
+            // so the Customer Menu API can find them easily
+            if (key === 'store_settings' && typeof value === 'object' && value !== null) {
+                const storeSettings = value as Record<string, unknown>;
+                for (const [subKey, subValue] of Object.entries(storeSettings)) {
+                    if (subKey.startsWith('brand_')) {
+                        const subValueStr = typeof subValue === 'string' ? subValue : JSON.stringify(subValue);
+                        await query(`
+                            INSERT INTO settings (key, value, updated_by, updated_at)
+                            VALUES ($1, $2, $3, NOW())
+                            ON CONFLICT (key) DO UPDATE SET
+                                value = EXCLUDED.value,
+                                updated_by = EXCLUDED.updated_by,
+                                updated_at = NOW()
+                        `, [subKey, subValueStr, userId]);
+                    }
+                }
+            }
         }
 
         res.json({

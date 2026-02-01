@@ -33,3 +33,5 @@ coverage/
 # Misc
 .cache/
 *.tsbuildinfo
+.agent/skills
+Antigravity-Shit-Chat

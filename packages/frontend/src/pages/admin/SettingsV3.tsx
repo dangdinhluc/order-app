@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
     Store, Receipt, Printer, Shield, Bell, Monitor,
-    CreditCard, Save, Loader2, Check, ChefHat
+    CreditCard, Save, Loader2, Check, ChefHat, Settings2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../services/api';
@@ -15,8 +15,9 @@ import NotificationSettings from './settings/v3/NotificationSettings';
 import PaymentSettings from './settings/v3/PaymentSettings';
 import ReceiptSettings from './settings/v3/ReceiptSettings';
 import StationManager from './StationManager';
+import ProductOptionsSettings from './settings/v3/ProductOptionsSettings';
 
-type TabId = 'general' | 'display' | 'receipt' | 'printer' | 'payment' | 'security' | 'notifications' | 'stations';
+type TabId = 'general' | 'display' | 'receipt' | 'printer' | 'payment' | 'security' | 'notifications' | 'stations' | 'product-options';
 
 export default function SettingsV3() {
     const [activeTab, setActiveTab] = useState<TabId>('general');
@@ -75,6 +76,7 @@ export default function SettingsV3() {
         { id: 'payment' as TabId, label: 'Thanh toán', icon: CreditCard, description: 'Phương thức thanh toán' },
         { id: 'security' as TabId, label: 'Bảo mật', icon: Shield, description: 'Phân quyền, mã PIN' },
         { id: 'notifications' as TabId, label: 'Thông báo', icon: Bell, description: 'Telegram bot' },
+        { id: 'product-options' as TabId, label: 'Tùy chọn món', icon: Settings2, description: 'Size, không hành, topping...' },
     ];
 
     const renderContent = () => {
@@ -97,6 +99,8 @@ export default function SettingsV3() {
                 return <NotificationSettings settings={allSettings.notification_settings} onChange={d => updateSection('notification_settings', d)} />;
             case 'stations':
                 return <StationManager />;
+            case 'product-options':
+                return <ProductOptionsSettings />;
             default:
                 return <div>Select a tab</div>;
         }

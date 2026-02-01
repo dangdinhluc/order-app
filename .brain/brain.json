@@ -7,7 +7,7 @@
     "project": {
         "name": "Hybrid POS",
         "description": "Comprehensive Restaurant Management System (POS, QR, KDS, Printing, Notifications)",
-        "status": "Alpha Release (Phase 1-12 Complete)"
+        "status": "Alpha Release (Phase 1-12 Complete + Customer Menu V4)"
     },
     "tech_stack": {
         "backend": {
@@ -37,7 +37,12 @@
         {
             "name": "QR Order",
             "status": "completed",
-            "desc": "Customer self-ordering via QR code (CustomerMenuV2)"
+            "desc": "Customer self-ordering via QR code (CustomerMenuV4 - horizontal tabs, glassmorphism, inline quantity)"
+        },
+        {
+            "name": "Customer Menu V4 Polish",
+            "status": "completed",
+            "desc": "Skeleton loading with shimmer, stagger animations, LazyImage component"
         },
         {
             "name": "KDS",

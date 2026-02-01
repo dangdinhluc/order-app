@@ -91,10 +91,17 @@ customerRouter.get('/menu-v3/:tableId', async (req, res) => {
         const lang = (req.query.lang as string) || 'vi';
 
         // Verify table exists
-        const tableResult = await query(
-            'SELECT id, number, name FROM tables WHERE id = $1',
-            [tableId]
-        );
+        let tableResult;
+
+        if (tableId === 'test-table') {
+            // For testing: get the first available table
+            tableResult = await query('SELECT id, number, name FROM tables ORDER BY number ASC LIMIT 1');
+        } else {
+            tableResult = await query(
+                'SELECT id, number, name FROM tables WHERE id = $1',
+                [tableId]
+            );
+        }
 
         if (tableResult.rows.length === 0) {
             res.status(404).json({ error: 'Không tìm thấy bàn' });
@@ -192,10 +199,10 @@ customerRouter.get('/menu-v3/:tableId', async (req, res) => {
             quickNotesMap[row.product_id] = row.notes;
         });
 
-        // Get V3 settings
+        // Get V3 settings (including branding)
         const settingsResult = await query(`
             SELECT key, value FROM settings 
-            WHERE key LIKE 'customer_%'
+            WHERE key LIKE 'customer_%' OR key LIKE 'brand_%'
         `);
 
         const settings: Record<string, any> = {};
@@ -218,7 +225,7 @@ customerRouter.get('/menu-v3/:tableId', async (req, res) => {
         });
     } catch (error) {
         console.error('Customer V3 menu error:', error);
-        res.status(500).json({ error: 'Lỗi tải menu' });
+        res.status(500).json({ error: 'Lỗi tải menu', details: (error as Error).message });
     }
 });
 

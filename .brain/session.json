@@ -1,20 +1,26 @@
 {
-    "updated_at": "2026-01-30T02:24:00+09:00",
+    "updated_at": "2026-02-01T08:09:00+09:00",
     "working_on": {
-        "feature": "POS Cashier UX Phase 1",
-        "task": "Completed Kitchen Workflow, Quick Search, Dynamic Payment Methods",
+        "feature": "Customer Menu V4 - Enhanced Polish",
+        "task": "Completed all V4 features and polish",
         "status": "completed",
         "files": [
-            "packages/backend/src/routes/orders.ts",
-            "packages/backend/src/routes/settings.ts",
-            "packages/backend/src/db/migrations/006_payment_methods.sql",
-            "packages/frontend/src/components/OrderPanel.tsx",
-            "packages/frontend/src/components/CheckoutModal.tsx",
-            "packages/frontend/src/services/api.ts"
+            "packages/frontend/src/pages/CustomerMenuV4.tsx",
+            "packages/frontend/src/App.tsx"
         ],
-        "notes": "All Phase 1 features tested and working"
+        "notes": "V4 is now the default customer menu route"
     },
     "recent_changes": [
+        {
+            "timestamp": "2026-02-01T08:09:00+09:00",
+            "type": "feature",
+            "description": "Customer Menu V4 Enhanced Polish - skeleton loading with shimmer, stagger animations"
+        },
+        {
+            "timestamp": "2026-02-01T07:50:00+09:00",
+            "type": "feature",
+            "description": "Customer Menu V4 Core - horizontal tabs, glassmorphism cards, inline quantity controls, floating cart"
+        },
         {
             "timestamp": "2026-01-30T02:20:00+09:00",
             "type": "feature",
@@ -29,24 +35,21 @@
             "timestamp": "2026-01-30T01:00:00+09:00",
             "type": "database",
             "description": "payment_methods table - 006_payment_methods.sql migration"
-        },
-        {
-            "timestamp": "2026-01-29T17:00:00+09:00",
-            "type": "feature",
-            "description": "Kitchen Workflow - Manual send-to-kitchen, status badges on items"
-        },
-        {
-            "timestamp": "2026-01-29T16:30:00+09:00",
-            "type": "feature",
-            "description": "Quick Search - Product search in OrderPanel header"
-        },
-        {
-            "timestamp": "2026-01-29T23:40:00+09:00",
-            "type": "feature",
-            "description": "Print Receipt - Utility for thermal printers (58mm/80mm)"
         }
     ],
     "decisions_made": [
+        {
+            "decision": "V4 replaces V3 as default customer menu",
+            "reason": "Better UX with horizontal tabs, modern glassmorphism design"
+        },
+        {
+            "decision": "Skeleton loading with shimmer effect",
+            "reason": "Premium feel during loading, shows UI structure"
+        },
+        {
+            "decision": "Stagger animation using framer-motion variants",
+            "reason": "Cards animate in sequence when category changes"
+        },
         {
             "decision": "Manual send-to-kitchen instead of auto",
             "reason": "Better control for staff, avoid kitchen overwhelm"
@@ -54,17 +57,14 @@
         {
             "decision": "Public endpoint for payment methods",
             "reason": "POS checkout needs data without extra auth check"
-        },
-        {
-            "decision": "requires_change flag on payment methods",
-            "reason": "Cash needs money input, card/QR doesn't"
-        },
-        {
-            "decision": "Use 'preparing' status not 'in_queue'",
-            "reason": "Database constraint only allows: pending, preparing, ready, served, cancelled"
         }
     ],
     "pending_tasks": [
+        {
+            "task": "Mobile viewport testing for V4",
+            "priority": "medium",
+            "notes": "Test responsive design on actual mobile devices"
+        },
         {
             "task": "Payment Methods Admin UI",
             "priority": "medium",
@@ -76,16 +76,6 @@
             "notes": "Area filtering in POS floor map"
         },
         {
-            "task": "Item Notes modal",
-            "priority": "low",
-            "notes": "Add/edit notes for each order item"
-        },
-        {
-            "task": "Invoice History page",
-            "priority": "low",
-            "notes": "Browse and reprint past invoices"
-        },
-        {
             "task": "Deploy to Production",
             "priority": "high",
             "notes": "System is feature-complete for initial launch"
@@ -93,18 +83,18 @@
     ],
     "errors_encountered": [
         {
+            "error": "motion.div closing tag mismatch after adding stagger",
+            "solution": "Changed </div> to </motion.div> for grid container",
+            "resolved": true
+        },
+        {
+            "error": "Extra brace in JSX comment after shimmer CSS injection",
+            "solution": "Removed duplicate closing brace",
+            "resolved": true
+        },
+        {
             "error": "kitchen_status 'in_queue' violated check constraint",
             "solution": "Changed to 'preparing' - only valid values are: pending, preparing, ready, served, cancelled",
-            "resolved": true
-        },
-        {
-            "error": "/api/settings/payment-methods returned Unauthorized",
-            "solution": "Created /api/public/payment-methods endpoint without auth",
-            "resolved": true
-        },
-        {
-            "error": "OrderPanel THANH TOÁN button opened old modal",
-            "solution": "Changed setShowPayment to setShowCheckout",
             "resolved": true
         }
     ]
