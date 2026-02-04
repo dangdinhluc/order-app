@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './components/Toast';
+import { DialogProvider } from './components/ui/DialogProvider';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import POS from './pages/POS';
@@ -21,7 +23,6 @@ import QRManager from './pages/admin/QRManager';
 // import CustomerMenu from './pages/CustomerMenu';
 import CustomerMenuV2 from './pages/CustomerMenuV2';
 import CustomerMenuV3 from './pages/CustomerMenuV3';
-import CustomerMenuV4 from './pages/CustomerMenuV4';
 import Reports from './pages/Reports';
 import CustomerSettings from './pages/admin/CustomerSettings';
 import type { ReactNode } from 'react';
@@ -106,14 +107,8 @@ function AppRoutes() {
 
       {/* PUBLIC: Customer self-order (no auth) - Using V3 as default */}
       <Route path="/customer/:tableId" element={<CustomerMenuV3 />} />
-      {/* V4 experimental */}
-      <Route path="/customer-v4/:tableId" element={<CustomerMenuV4 />} />
-      {/* V3 explicit */}
-      <Route path="/customer-v3/:tableId" element={<CustomerMenuV3 />} />
-      {/* V2 fallback */}
+      {/* Legacy V2 fallback only */}
       <Route path="/menu-v2/:tableId" element={<CustomerMenuV2 />} />
-      {/* Deprecated: Old V1 menu */}
-      {/* <Route path="/menu/:tableId" element={<CustomerMenuV2 />} /> */}
 
       <Route
         path="/dashboard"
@@ -243,8 +238,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <ToastProvider>
+          <DialogProvider>
+            <AppRoutes />
+          </DialogProvider>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );
 }
+

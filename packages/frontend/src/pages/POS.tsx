@@ -34,10 +34,22 @@ export default function POS() {
         loadData();
         setupSocketListeners();
 
+        // Auto-refresh tables every 30 seconds as fallback
+        const refreshInterval = setInterval(() => {
+            console.log('[POS] Auto-refreshing tables...');
+            api.getTables().then(res => {
+                if (res.data) setTables(res.data.tables);
+            });
+        }, 30000);
+
         return () => {
             // Cleanup socket listeners
             socketService.off('table:opened', handleTableUpdate);
             socketService.off('table:closed', handleTableUpdate);
+            socketService.off('tables:refresh', handleTableUpdate);
+            socketService.off('order:item_added', handleOrderItemAdded);
+            socketService.off('kitchen:new_item', handleKitchenNewItem);
+            clearInterval(refreshInterval);
         };
     }, []);
 
@@ -60,19 +72,45 @@ export default function POS() {
     };
 
     const setupSocketListeners = () => {
+        // Join POS room for receiving updates
+        socketService.emit('join:pos-room', {});
+
         socketService.on('table:opened', handleTableUpdate);
         socketService.on('table:closed', handleTableUpdate);
         socketService.on('table:transferred', handleTableUpdate);
         socketService.on('table:merged', handleTableUpdate);
+        // New listeners for QR order realtime updates
+        socketService.on('tables:refresh', handleTableUpdate);
+        socketService.on('order:item_added', handleOrderItemAdded);
+        socketService.on('kitchen:new_item', handleKitchenNewItem);
+
         socketService.on('product:availability_changed', handleProductAvailabilityChanged);
         socketService.on('kitchen:item_ready', handleItemReady);
     };
 
     const handleTableUpdate = () => {
         // Reload tables when table status changes
+        console.log('[POS] Table update received, refreshing...');
         api.getTables().then(res => {
             if (res.data) setTables(res.data.tables);
         });
+    };
+
+    const handleOrderItemAdded = (data: unknown) => {
+        const { table_number } = data as { table_number: number; order_id: string };
+        console.log(`[POS] New item added to table ${table_number}, refreshing tables...`);
+        // Refresh tables to show updated status
+        api.getTables().then(res => {
+            if (res.data) setTables(res.data.tables);
+        });
+    };
+
+    const handleKitchenNewItem = (data: unknown) => {
+        const { table_number } = data as { table_number: number };
+        console.log(`[POS] Kitchen item from table ${table_number}`);
+        // Play sound for new kitchen item
+        const audio = new Audio('/sounds/order.mp3');
+        audio.play().catch(() => { });
     };
 
     const handleProductAvailabilityChanged = (data: unknown) => {

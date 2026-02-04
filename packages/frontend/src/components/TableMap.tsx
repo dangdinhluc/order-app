@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Table, Area } from '../services/api';
 import { api } from '../services/api';
 import { Clock, Users, DollarSign, QrCode, ArrowRight, Merge, MoreHorizontal, ChefHat } from 'lucide-react';
+import { useToast } from './Toast';
 
 interface TableMapProps {
     tables: Table[];
@@ -11,6 +12,7 @@ interface TableMapProps {
 }
 
 export default function TableMap({ tables, selectedTable, onTableSelect, onRefresh }: TableMapProps) {
+    const toast = useToast();
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     // We keep contextMenu state for backward compatibility or complex actions, 
     // but the primary interaction is now via the Quick Menu button
@@ -68,9 +70,17 @@ export default function TableMap({ tables, selectedTable, onTableSelect, onRefre
 
     const getSessionDuration = (startedAt?: string) => {
         if (!startedAt) return '';
+        // Parse the server timestamp - JavaScript Date handles ISO 8601 with timezone correctly
         const start = new Date(startedAt);
         const now = new Date();
-        const diff = Math.floor((now.getTime() - start.getTime()) / 1000 / 60);
+
+        // Both dates are now in UTC internally, so difference is correct
+        const diffMs = now.getTime() - start.getTime();
+
+        // If negative (server time is in future), return 0
+        if (diffMs < 0) return '0p';
+
+        const diff = Math.floor(diffMs / 1000 / 60);
         const hours = Math.floor(diff / 60);
         const mins = diff % 60;
         return hours > 0 ? `${hours}h ${mins}p` : `${mins}p`;
@@ -92,7 +102,7 @@ export default function TableMap({ tables, selectedTable, onTableSelect, onRefre
             onRefresh?.();
         } catch (error) {
             console.error('Error transferring table:', error);
-            alert('Không thể chuyển bàn');
+            toast.error('Không thể chuyển bàn', 'Vui lòng thử lại sau');
         } finally {
             setIsLoading(false);
         }
@@ -108,7 +118,7 @@ export default function TableMap({ tables, selectedTable, onTableSelect, onRefre
             onRefresh?.();
         } catch (error) {
             console.error('Error merging tables:', error);
-            alert('Không thể gộp bàn');
+            toast.error('Không thể gộp bàn', 'Vui lòng thử lại sau');
         } finally {
             setIsLoading(false);
         }

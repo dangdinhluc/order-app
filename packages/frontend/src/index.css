@@ -66,6 +66,42 @@ html {
     scroll-behavior: smooth;
 }
 
+/* Hide scrollbar but keep functionality */
+.no-scrollbar {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari, Opera */
+}
+
+/* iOS momentum scrolling - critical for smooth scroll on mobile Safari */
+.touch-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+/* Apply touch scroll to elements with overflow */
+[style*="overflow"],
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-auto {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Safe area for mobile with notches */
+.safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+.safe-area-top {
+    padding-top: env(safe-area-inset-top, 0);
+}
+
 body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -140,4 +176,155 @@ body,
     .no-print {
         display: none !important;
     }
+}
+
+/* ============================================
+   CUSTOMER MENU ENHANCEMENTS
+   ============================================ */
+
+/* 1. Pulse effect for add buttons */
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 20px 10px rgba(251, 191, 36, 0.2);
+    }
+}
+
+.btn-pulse:hover {
+    animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+/* 2. Confetti animation */
+@keyframes confetti-fall {
+    0% {
+        transform: translateY(-10px) rotate(0deg);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translateY(100px) rotate(720deg);
+        opacity: 0;
+    }
+}
+
+.confetti-particle {
+    position: fixed;
+    pointer-events: none;
+    animation: confetti-fall 1s ease-out forwards;
+    z-index: 9999;
+}
+
+/* 3. Shimmer skeleton loading */
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.skeleton-shimmer {
+    background: linear-gradient(90deg,
+            rgba(255, 255, 255, 0.05) 0%,
+            rgba(255, 255, 255, 0.15) 50%,
+            rgba(255, 255, 255, 0.05) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+/* 4. Animated flame for HOT badges */
+@keyframes flame-flicker {
+
+    0%,
+    100% {
+        transform: scale(1) rotate(-2deg);
+        filter: brightness(1);
+    }
+
+    25% {
+        transform: scale(1.1) rotate(2deg);
+        filter: brightness(1.2);
+    }
+
+    50% {
+        transform: scale(1) rotate(-1deg);
+        filter: brightness(1.1);
+    }
+
+    75% {
+        transform: scale(1.15) rotate(1deg);
+        filter: brightness(1.3);
+    }
+}
+
+.flame-animate {
+    animation: flame-flicker 0.5s ease-in-out infinite;
+    display: inline-block;
+}
+
+/* 7. Pull to refresh indicator */
+@keyframes pull-bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+.pull-indicator {
+    animation: pull-bounce 0.6s ease-in-out infinite;
+}
+
+/* Swipe hint animation */
+@keyframes swipe-hint {
+
+    0%,
+    100% {
+        transform: translateX(0);
+        opacity: 0.5;
+    }
+
+    50% {
+        transform: translateX(10px);
+        opacity: 1;
+    }
+}
+
+.swipe-hint {
+    animation: swipe-hint 1.5s ease-in-out infinite;
+}
+
+/* Success flash animation */
+@keyframes success-flash {
+    0% {
+        background-color: rgba(34, 197, 94, 0);
+    }
+
+    50% {
+        background-color: rgba(34, 197, 94, 0.3);
+    }
+
+    100% {
+        background-color: rgba(34, 197, 94, 0);
+    }
+}
+
+.success-flash {
+    animation: success-flash 0.5s ease-out;
+}
+
+/* Stacked Cards - 3D Perspective */
+.perspective-1000 {
+    perspective: 1000px;
 }

@@ -25,7 +25,9 @@ import { comboRouter } from './routes/combos.js';
 import { exportRouter } from './routes/export.js';
 import { notificationRouter } from './routes/notification.js';
 import { stationsRouter } from './routes/stations.js';
+import { adminRouter } from './routes/admin.js';
 import { setupSocketHandlers } from './socket/index.js';
+import { startSessionCleanupJob } from './jobs/sessionCleanup.js';
 // ... (omitting lines for brevity, wait, I should target the specific block I messed up)
 import { errorHandler } from './middleware/errorHandler.js';
 import { authMiddleware } from './middleware/auth.js';
@@ -88,6 +90,7 @@ app.use('/api/vouchers', authMiddleware, vouchersRouter);
 app.use('/api/settings', authMiddleware, settingsRouter);
 app.use('/api/cash', authMiddleware, cashRouter);
 app.use('/api/stations', authMiddleware, stationsRouter);
+app.use('/api/admin', authMiddleware, adminRouter);
 
 // Public endpoint for payment methods (needed for POS checkout without extra auth check)
 app.get('/api/public/payment-methods', async (_req, res, next) => {
@@ -120,6 +123,10 @@ const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
     console.log(`📡 Socket.IO ready`);
+
+    // Start scheduled jobs
+    startSessionCleanupJob();
+
     console.log(`\n📋 Available endpoints:`);
     console.log(`   GET  /api/health`);
     console.log(`   POST /api/auth/login`);

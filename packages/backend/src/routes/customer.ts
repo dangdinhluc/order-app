@@ -1,5 +1,6 @@
 import express from 'express';
 import { query } from '../db/pool.js';
+import { emitToKitchen } from '../socket/index.js';
 
 export const customerRouter = express.Router();
 
@@ -303,14 +304,15 @@ customerRouter.post('/order', async (req, res) => {
             return;
         }
 
-        // Calculate total for new items
+        // Calculate total for new items and get display_in_kitchen flag
         const productIds = items.map((item: { product_id: string }) => item.product_id);
         const productsResult = await query(
-            'SELECT id, price FROM products WHERE id = ANY($1)',
+            'SELECT id, price, display_in_kitchen FROM products WHERE id = ANY($1)',
             [productIds]
         );
 
         const priceMap = new Map<string, number>(productsResult.rows.map((p: { id: string; price: string }) => [p.id, parseFloat(p.price)]));
+        const kitchenMap = new Map<string, boolean>(productsResult.rows.map((p: { id: string; display_in_kitchen: boolean }) => [p.id, p.display_in_kitchen ?? true]));
 
         let newItemsTotal = 0;
         for (const item of items) {
@@ -330,8 +332,8 @@ customerRouter.post('/order', async (req, res) => {
         let orderId: string;
         let ticketNumber = 1;
 
-        if (sessionResult.rows.length > 0) {
-            // Session exists - use existing order
+        if (sessionResult.rows.length > 0 && sessionResult.rows[0].order_id) {
+            // Session exists with valid order - use existing order
             sessionId = sessionResult.rows[0].id;
             orderId = sessionResult.rows[0].order_id;
 
@@ -367,10 +369,16 @@ customerRouter.post('/order', async (req, res) => {
             );
             sessionId = newSessionResult.rows[0].id;
 
-            // Update order with session_id
+            // Update order with table_session_id
             await query(
-                'UPDATE orders SET session_id = $1 WHERE id = $2',
+                'UPDATE orders SET table_session_id = $1 WHERE id = $2',
                 [sessionId, orderId]
+            );
+
+            // Update table status to 'occupied'
+            await query(
+                `UPDATE tables SET status = 'occupied', current_order_id = $1 WHERE id = $2`,
+                [orderId, table_id]
             );
         }
 
@@ -386,13 +394,14 @@ customerRouter.post('/order', async (req, res) => {
         // 3. Insert order items and link to ticket
         for (const item of items) {
             const price = priceMap.get(item.product_id) || 0;
+            const displayInKitchen = kitchenMap.get(item.product_id) ?? true;
 
-            // Insert order item
+            // Insert order item with display_in_kitchen and kitchen_status
             const orderItemResult = await query(
-                `INSERT INTO order_items (order_id, product_id, quantity, unit_price, note)
-                 VALUES ($1, $2, $3, $4, $5)
+                `INSERT INTO order_items (order_id, product_id, quantity, unit_price, note, display_in_kitchen, kitchen_status)
+                 VALUES ($1, $2, $3, $4, $5, $6, 'pending')
                  RETURNING id`,
-                [orderId, item.product_id, item.quantity, price, item.notes || null]
+                [orderId, item.product_id, item.quantity, price, item.notes || null, displayInKitchen]
             );
             const orderItemId = orderItemResult.rows[0].id;
 
@@ -407,13 +416,20 @@ customerRouter.post('/order', async (req, res) => {
         // 4. Emit socket event for real-time update (kitchen display)
         const io = req.app.get('io');
         if (io) {
-            io.emit('order:new', {
+            emitToKitchen(io, 'kitchen:new_item', {
                 order_id: orderId,
                 ticket_id: ticketId,
                 ticket_number: ticketNumber,
                 table_id,
                 session_id: sessionId,
                 from_customer: true
+            });
+
+            // Notify POS about table status change
+            io.to('pos-room').emit('table:opened', {
+                table_id,
+                order_id: orderId,
+                session_id: sessionId
             });
         }
 

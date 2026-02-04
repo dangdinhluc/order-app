@@ -4,6 +4,7 @@ import type { Order, OrderItem, PaymentMethod } from '../services/api';
 import type { LucideIcon } from 'lucide-react';
 import { X, CreditCard, Banknote, Smartphone, Receipt, Tag, CheckCircle2, Printer, Wallet } from 'lucide-react';
 import { printReceipt } from '../utils/printReceipt';
+import { useToast } from './Toast';
 
 interface CheckoutModalProps {
     order: Order;
@@ -29,6 +30,7 @@ const getIcon = (iconName?: string): LucideIcon => {
 const QUICK_AMOUNTS = [10000, 20000, 50000, 100000, 200000, 500000];
 
 export default function CheckoutModal({ order, items = [], tableName, onClose, onSuccess }: CheckoutModalProps) {
+    const toast = useToast();
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [selectedMethod, setSelectedMethod] = useState('');
     const [receivedAmount, setReceivedAmount] = useState<number>(0);
@@ -85,7 +87,7 @@ export default function CheckoutModal({ order, items = [], tableName, onClose, o
 
     const handlePayment = async () => {
         if (currentMethod?.requires_change && receivedAmount < finalTotal) {
-            alert('Số tiền nhận chưa đủ!');
+            toast.warning('Tiền chưa đủ', 'Số tiền nhận chưa đủ để thanh toán');
             return;
         }
 
@@ -111,7 +113,7 @@ export default function CheckoutModal({ order, items = [], tableName, onClose, o
                 onSuccess();
             }, 3000); // Extended to allow printing
         } catch (error: any) {
-            alert(error.message || 'Thanh toán thất bại');
+            toast.error('Thanh toán thất bại', error.message || 'Vui lòng thử lại');
         } finally {
             setIsProcessing(false);
         }

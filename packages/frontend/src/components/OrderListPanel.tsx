@@ -6,6 +6,7 @@ import {
     Search, RotateCcw, Trash2, X, Lock, CheckCircle, XCircle, AlertCircle
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
+import { useToast } from './Toast';
 
 interface OrderListPanelProps {
     onSelectOrder: (orderId: string, orderType: 'dine_in' | 'takeaway' | 'retail') => void;
@@ -16,6 +17,7 @@ type TypeFilter = 'all' | 'dine_in' | 'takeaway' | 'retail';
 type SortBy = 'newest' | 'oldest';
 
 export default function OrderListPanel({ onSelectOrder }: OrderListPanelProps) {
+    const toast = useToast();
     const [orders, setOrders] = useState<Order[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -91,7 +93,7 @@ export default function OrderListPanel({ onSelectOrder }: OrderListPanelProps) {
             loadOrders();
             loadStats();
         } catch (error: any) {
-            alert(error.message || 'Không thể hủy đơn hàng');
+            toast.error('Không thể hủy', error.message || 'Không thể hủy đơn hàng');
         } finally {
             setIsCancelling(false);
         }
@@ -108,7 +110,7 @@ export default function OrderListPanel({ onSelectOrder }: OrderListPanelProps) {
             loadOrders();
             loadStats();
         } catch (error: any) {
-            alert(error.message || 'Không thể xóa đơn hàng');
+            toast.error('Không thể xóa', error.message || 'Không thể xóa đơn hàng');
         } finally {
             setDeleteOrderId(null);
         }
@@ -132,10 +134,10 @@ export default function OrderListPanel({ onSelectOrder }: OrderListPanelProps) {
                 setPinModal(null);
                 setAccessPin('');
             } else {
-                alert('PIN không đúng');
+                toast.error('PIN không đúng', 'Vui lòng nhập lại');
             }
         } catch (error: any) {
-            alert(error.message || 'PIN không đúng');
+            toast.error('PIN không đúng', error.message || 'Vui lòng nhập lại');
         } finally {
             setIsVerifying(false);
         }

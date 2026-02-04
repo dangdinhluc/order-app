@@ -1,4 +1,5 @@
-import { Shield, Lock, AlertTriangle } from 'lucide-react';
+import { Shield, Lock, AlertTriangle, Trash2, Download, Upload } from 'lucide-react';
+import { useState } from 'react';
 
 interface PermissionSettings {
     max_discount_percent: number;
@@ -24,6 +25,146 @@ export default function SecuritySettings({ settings, onChange }: Props) {
 
     const handleChange = (key: keyof PermissionSettings, value: any) => {
         if (onChange) onChange({ ...data, [key]: value });
+    };
+
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [resetInput, setResetInput] = useState('');
+    const [isResetting, setIsResetting] = useState(false);
+
+    const handleResetDatabase = async () => {
+        if (resetInput !== 'RESET') {
+            alert('Vui lòng nhập chính xác "RESET" để xác nhận');
+            return;
+        }
+
+        const finalConfirm = confirm(
+            '⚠️ CẢNH BÁO CUỐI CÙNG!\n\nHành động này sẽ XÓA VĨNH VIỄN:\n' +
+            '- Tất cả đơn hàng\n' +
+            '- Lịch sử bàn\n' +
+            '- Kitchen tickets\n\n' +
+            'Bấm OK để tiếp tục xóa, Cancel để hủy'
+        );
+
+        if (!finalConfirm) return;
+
+        setIsResetting(true);
+        try {
+            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const token = localStorage.getItem('token');
+
+            const response = await fetch(`${API_URL}/api/admin/reset-database`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Reset failed');
+            }
+
+            alert('✅ Database đã được reset thành công!');
+            setShowResetConfirm(false);
+            setResetInput('');
+            window.location.reload();
+        } catch (error: any) {
+            console.error('Reset error:', error);
+            alert(`❌ Lỗi: ${error.message || 'Không thể reset database'}`);
+        } finally {
+            setIsResetting(false);
+        }
+    };
+
+    // Backup & Import handlers
+    const [isBackingUp, setIsBackingUp] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
+
+    const handleBackup = async () => {
+        setIsBackingUp(true);
+        try {
+            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const token = localStorage.getItem('token');
+
+            const response = await fetch(`${API_URL}/api/admin/backup`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Backup failed');
+            }
+
+            // Download file
+            const blob = await response.blob();
+            const filename = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'backup.json';
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+            alert('✅ Backup tải xuống thành công!');
+        } catch (error: any) {
+            console.error('Backup error:', error);
+            alert(`❌ Lỗi: ${error.message || 'Không thể tạo backup'}`);
+        } finally {
+            setIsBackingUp(false);
+        }
+    };
+
+    const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const confirm = window.confirm(
+            '⚠️ CẢNH BÁO!\n\n' +
+            'Import sẽ XÓA TOÀN BỘ dữ liệu hiện tại và thay thế bằng dữ liệu từ file backup.\n\n' +
+            'Bạn có chắc chắn muốn tiếp tục?'
+        );
+
+        if (!confirm) {
+            event.target.value = ''; // Reset input
+            return;
+        }
+
+        setIsImporting(true);
+        try {
+            const content = await file.text();
+            const backup = JSON.parse(content);
+
+            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const token = localStorage.getItem('token');
+
+            const response = await fetch(`${API_URL}/api/admin/import`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(backup)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Import failed');
+            }
+
+            alert('✅ Import thành công! Trang sẽ tự động reload.');
+            window.location.reload();
+        } catch (error: any) {
+            console.error('Import error:', error);
+            alert(`❌ Lỗi: ${error.message || 'Không thể import backup'}`);
+        } finally {
+            setIsImporting(false);
+            event.target.value = ''; // Reset input
+        }
     };
 
     return (
@@ -103,6 +244,121 @@ export default function SecuritySettings({ settings, onChange }: Props) {
                         checked={data.allow_price_override}
                         onChange={(v) => handleChange('allow_price_override', v)}
                     />
+                </div>
+            </div>
+
+            {/* BACKUP & IMPORT */}
+            <div className="border-t-4 border-blue-200 pt-8">
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-blue-700 flex items-center gap-2 mb-2">
+                        <Download className="text-blue-600" size={24} />
+                        Backup & Import
+                    </h3>
+                    <p className="text-blue-600 mb-4">Sao lưu và khôi phục dữ liệu của bạn</p>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                        {/* Backup */}
+                        <div className="bg-white rounded-xl p-4 border border-blue-200">
+                            <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                <Download size={18} className="text-blue-600" />
+                                Backup Database
+                            </h4>
+                            <p className="text-sm text-slate-600 mb-4">
+                                Tải về file JSON chứa toàn bộ dữ liệu: sản phẩm, đơn hàng, cài đặt, bàn...
+                            </p>
+                            <button
+                                onClick={handleBackup}
+                                disabled={isBackingUp}
+                                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                <Download size={18} />
+                                {isBackingUp ? 'Đang tạo backup...' : 'Tải về Backup'}
+                            </button>
+                        </div>
+
+                        {/* Import */}
+                        <div className="bg-white rounded-xl p-4 border border-blue-200">
+                            <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                <Upload size={18} className="text-blue-600" />
+                                Import Database
+                            </h4>
+                            <p className="text-sm text-slate-600 mb-4">
+                                Tải lên file backup để khôi phục dữ liệu. <strong className="text-red-600">Sẽ xóa data hiện tại!</strong>
+                            </p>
+                            <label className="w-full block">
+                                <input
+                                    type="file"
+                                    accept=".json"
+                                    onChange={handleImport}
+                                    disabled={isImporting}
+                                    className="hidden"
+                                    id="import-file"
+                                />
+                                <span className="cursor-pointer w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-center">
+                                    <Upload size={18} />
+                                    {isImporting ? 'Đang import...' : 'Chọn file Backup'}
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* DANGER ZONE */}
+            <div className="border-t-4 border-red-200 pt-8">
+                <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-red-700 flex items-center gap-2 mb-2">
+                        <Trash2 className="text-red-600" size={24} />
+                        Vùng Nguy Hiểm
+                    </h3>
+                    <p className="text-red-600 mb-4">Các hành động bên dưới không thể hoàn tác. Hãy cẩn thận!</p>
+
+                    <div className="bg-white rounded-xl p-4 border border-red-200">
+                        <h4 className="font-bold text-slate-800 mb-2">Reset Database</h4>
+                        <p className="text-sm text-slate-600 mb-4">
+                            Xóa toàn bộ đơn hàng, lịch sử bàn, kitchen tickets. Dùng để setup lại từ đầu.
+                        </p>
+
+                        {!showResetConfirm ? (
+                            <button
+                                onClick={() => setShowResetConfirm(true)}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                            >
+                                Reset Database
+                            </button>
+                        ) : (
+                            <div className="space-y-3">
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                                    <p className="text-sm font-bold text-red-800 mb-2">⚠️ Để xác nhận, gõ chữ "RESET" (in hoa) vào ô bên dưới:</p>
+                                    <input
+                                        type="text"
+                                        value={resetInput}
+                                        onChange={(e) => setResetInput(e.target.value)}
+                                        placeholder="Nhập RESET"
+                                        className="w-full px-3 py-2 border-2 border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none font-mono"
+                                    />
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleResetDatabase}
+                                        disabled={resetInput !== 'RESET' || isResetting}
+                                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isResetting ? 'Đang xóa...' : 'Xác nhận xóa'}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowResetConfirm(false);
+                                            setResetInput('');
+                                        }}
+                                        className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors font-medium"
+                                    >
+                                        Hủy
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

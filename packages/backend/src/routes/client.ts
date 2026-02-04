@@ -162,6 +162,9 @@ router.post('/order/items', async (req: Request, res: Response, next: NextFuncti
                 [table_id, session_id]
             );
             orderId = newOrder.rows[0].id;
+
+            // Update table status to occupied when first order is created
+            await query(`UPDATE tables SET status = 'occupied' WHERE id = $1`, [table_id]);
         }
 
         // Get product
@@ -176,12 +179,16 @@ router.post('/order/items', async (req: Request, res: Response, next: NextFuncti
 
         const product = productResult.rows[0];
 
+        // Explicitly convert display_in_kitchen to boolean (fix for PostgreSQL type issues)
+        const displayInKitchen = product.display_in_kitchen === true || product.display_in_kitchen === 'true' || product.display_in_kitchen === 't';
+        console.log(`[QR Order] Product: ${product.name_vi}, display_in_kitchen raw: ${product.display_in_kitchen} (${typeof product.display_in_kitchen}), converted: ${displayInKitchen}`);
+
         // Add item
         const itemResult = await query(
             `INSERT INTO order_items (order_id, product_id, quantity, unit_price, display_in_kitchen, note)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-            [orderId, product_id, quantity, product.price, product.display_in_kitchen, note || null]
+            [orderId, product_id, quantity, product.price, displayInKitchen, note || null]
         );
 
         // Update order total
@@ -203,12 +210,24 @@ router.post('/order/items', async (req: Request, res: Response, next: NextFuncti
                 item: itemResult.rows[0],
             });
 
-            // Notify kitchen if kitchen item
-            if (product.display_in_kitchen) {
+            // Notify kitchen if kitchen item (use converted boolean)
+            if (displayInKitchen) {
+                console.log(`[QR Order] 🍳 Sending to kitchen-room: ${product.name_vi}, table ${table_number}`);
+
                 io.to('kitchen-room').emit('kitchen:new_item', {
-                    item: { ...itemResult.rows[0], product_name_vi: product.name_vi },
+                    item: {
+                        ...itemResult.rows[0],
+                        product_name_vi: product.name_vi,
+                        kitchen_status: 'pending' // Ensure status is included
+                    },
                     table_number,
                 });
+
+                // Play notification sound on kitchen devices (same as POS sendToKitchen)
+                io.to('kitchen-room').emit('play:notification_sound');
+                console.log(`[QR Order] ✅ Kitchen notification sent successfully`);
+            } else {
+                console.log(`[QR Order] 📦 Item ${product.name_vi} is NOT a kitchen item, skipping kitchen notification`);
             }
 
             // Notify POS about new order item
@@ -216,6 +235,12 @@ router.post('/order/items', async (req: Request, res: Response, next: NextFuncti
                 order_id: orderId,
                 table_number,
                 item: itemResult.rows[0],
+            });
+
+            // Notify POS to refresh table status (for realtime table map update)
+            io.to('pos-room').emit('tables:refresh', {
+                table_id: table_id,
+                status: 'occupied',
             });
         }
 

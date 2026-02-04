@@ -17,6 +17,12 @@ export const setupSocketHandlers = (io: SocketIOServer) => {
             console.log(`👤 User ${userId} joined POS room`);
         });
 
+        // Alternative join without userId (for frontend compatibility)
+        socket.on('join:pos-room', () => {
+            socket.join('pos-room');
+            console.log(`👤 Client ${socket.id} joined POS room`);
+        });
+
         socket.on('join:kitchen', ({ userId }) => {
             socket.userId = userId;
             socket.join('kitchen-room');

@@ -5,8 +5,6 @@ import {
     Search, ShoppingCart, Plus, Minus, X, Bell, Menu,
     Loader2, Sparkles, Flame, Star, Clock, RefreshCw, ChevronDown
 } from 'lucide-react';
-import { useDialog } from '../components/ui/DialogProvider';
-import SuccessCelebration from '../components/ui/SuccessCelebration';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -163,7 +161,6 @@ const GRADIENTS = {
 
 export default function CustomerMenuV3() {
     const { tableId } = useParams<{ tableId: string }>();
-    const dialog = useDialog();
 
     const [appState, setAppState] = useState<AppState>('idle');
     const [language, setLanguage] = useState<Language>('vi');
@@ -198,10 +195,6 @@ export default function CustomerMenuV3() {
     const [confettiParticles, setConfettiParticles] = useState<{ id: number; x: number; y: number; color: string }[]>([]);
     const [isPulling, setIsPulling] = useState(false);
     const [pullDistance, setPullDistance] = useState(0);
-    const [showSuccessCelebration, setShowSuccessCelebration] = useState(false);
-    const [greetingLangIndex, setGreetingLangIndex] = useState(0); // For rotating greetings
-
-    const GREETING_LANGUAGES: Language[] = ['vi', 'jp', 'cn'];
 
     const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastActivityRef = useRef<number>(Date.now());
@@ -253,16 +246,6 @@ export default function CustomerMenuV3() {
             return () => clearInterval(interval);
         }
     }, [appState, slideshow.length]);
-
-    // Rotate greeting language every 3 seconds on idle screen
-    useEffect(() => {
-        if (appState === 'idle') {
-            const interval = setInterval(() => {
-                setGreetingLangIndex(prev => (prev + 1) % 3);
-            }, 3000);
-            return () => clearInterval(interval);
-        }
-    }, [appState]);
 
     const fetchMenu = useCallback(async (lang: Language) => {
         if (!tableId) return;
@@ -457,15 +440,11 @@ export default function CustomerMenuV3() {
             // Success
             setCart([]);
             setShowCart(false);
-            setShowSuccessCelebration(true); // Show celebration with confetti
+            alert(language === 'vi' ? 'Đã gửi đơn hàng thành công!' : language === 'jp' ? '注文が送信されました！' : '订单已发送！');
             fetchMenu(language); // Refresh to get updated session
         } catch (err) {
             console.error(err);
-            await dialog.alert({
-                title: language === 'vi' ? 'Lỗi!' : language === 'jp' ? 'エラー！' : '错误！',
-                message: language === 'vi' ? 'Lỗi gửi đơn hàng!' : language === 'jp' ? '注文の送信に失敗しました！' : '发送订单失败！',
-                variant: 'error'
-            });
+            alert(language === 'vi' ? 'Lỗi gửi đơn hàng!' : language === 'jp' ? '注文の送信に失敗しました！' : '发送订单失败！');
         } finally {
             setIsSubmitting(false);
         }
@@ -474,15 +453,8 @@ export default function CustomerMenuV3() {
     const scrollToCategory = (categoryId: string) => {
         setShowCategoryMenu(false);
         const element = document.getElementById(`category-${categoryId}`);
-        const container = document.getElementById('main-scroll-container');
-        if (element && container) {
-            // Calculate offset: element position, minus a small gap for sticky header (~10px)
-            const headerOffset = 10;
-            const elementTop = element.offsetTop;
-            container.scrollTo({
-                top: elementTop - headerOffset,
-                behavior: 'smooth'
-            });
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth' });
         }
     };
 
@@ -512,13 +484,13 @@ export default function CustomerMenuV3() {
 
     const t = UI_TEXTS[language];
 
-    // ==================== IDLE / WELCOME SCREEN (Merged with Language Selection) ====================
+    // ==================== IDLE SCREEN ====================
     if (appState === 'idle') {
-        const currentGreetingLang = GREETING_LANGUAGES[greetingLangIndex];
-
         return (
-            <div className="fixed inset-0 bg-black flex items-center justify-center overflow-hidden">
-                {/* Background Slideshow */}
+            <div
+                className="fixed inset-0 bg-black flex items-center justify-center cursor-pointer overflow-hidden"
+                onClick={() => setAppState('language')}
+            >
                 <AnimatePresence mode="wait">
                     {slideshow.length > 0 && (
                         <motion.div
@@ -534,91 +506,51 @@ export default function CustomerMenuV3() {
                                 alt=""
                                 className="w-full h-full object-cover"
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/30" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/20" />
                         </motion.div>
                     )}
                 </AnimatePresence>
 
-                {/* Main Content */}
                 <motion.div
-                    className="relative z-10 text-center px-6 w-full max-w-md"
+                    className="relative z-10 text-center"
                     initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
+                    transition={{ delay: 0.5 }}
                 >
-                    {/* Logo */}
                     <motion.div
-                        className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-2xl shadow-amber-500/30"
+                        className="w-24 h-24 mx-auto mb-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-2xl shadow-amber-500/30"
                         animate={{ scale: [1, 1.05, 1] }}
                         transition={{ duration: 2, repeat: Infinity }}
                     >
-                        <span className="text-4xl sm:text-5xl">🍜</span>
+                        <span className="text-5xl">🍜</span>
                     </motion.div>
 
-                    {/* Rotating Greeting - AnimatePresence for smooth transitions */}
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={currentGreetingLang}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.5 }}
-                            className="mb-8"
-                        >
-                            <h1 className="text-3xl sm:text-4xl md:text-5xl font-light text-white mb-2 tracking-wide">
-                                {LANG_LABELS[currentGreetingLang].welcome}
-                            </h1>
-                            <p className="text-base sm:text-lg text-amber-200/70">
-                                {LANG_LABELS[currentGreetingLang].tap}
-                            </p>
-                        </motion.div>
-                    </AnimatePresence>
+                    <h1 className="text-5xl font-light text-white mb-3 tracking-wide">
+                        {LANG_LABELS.vi.welcome}
+                    </h1>
+                    <p className="text-xl text-amber-200/80 mb-12">{LANG_LABELS.vi.tap}</p>
 
-                    {/* Language Selection Buttons - Responsive */}
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mb-6">
-                        {GREETING_LANGUAGES.map((lang, i) => (
-                            <motion.button
+                    <div className="flex justify-center gap-6">
+                        {(['vi', 'jp', 'cn'] as Language[]).map((lang, i) => (
+                            <motion.div
                                 key={lang}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.5 + i * 0.1 }}
-                                whileHover={{ scale: 1.03 }}
-                                whileTap={{ scale: 0.97 }}
-                                onClick={() => handleLanguageSelect(lang)}
-                                className={`group flex items-center gap-3 sm:flex-col sm:gap-2 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl backdrop-blur-xl border transition-all duration-300 ${greetingLangIndex === i
-                                        ? 'bg-amber-500/20 border-amber-400/50'
-                                        : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
-                                    }`}
+                                transition={{ delay: 0.8 + i * 0.1 }}
+                                className="text-4xl p-3 rounded-full bg-white/10 backdrop-blur-sm"
                             >
-                                <span className="text-3xl sm:text-4xl group-hover:scale-110 transition-transform duration-300">
-                                    {LANG_LABELS[lang].flag}
-                                </span>
-                                <span className={`text-sm sm:text-base font-medium transition-colors ${greetingLangIndex === i ? 'text-amber-200' : 'text-white/70 group-hover:text-white'
-                                    }`}>
-                                    {LANG_LABELS[lang].name}
-                                </span>
-                            </motion.button>
+                                {LANG_LABELS[lang].flag}
+                            </motion.div>
                         ))}
                     </div>
-
-                    {/* Hint text */}
-                    <motion.p
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 1 }}
-                        className="text-xs sm:text-sm text-white/40"
-                    >
-                        Chọn ngôn ngữ để bắt đầu • 言語を選択 • 选择语言
-                    </motion.p>
                 </motion.div>
 
-                {/* Slideshow Indicators */}
                 {slideshow.length > 1 && (
-                    <div className="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 flex gap-2">
+                    <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex gap-3">
                         {slideshow.map((_, i) => (
                             <motion.div
                                 key={i}
-                                className={`h-1 rounded-full transition-all duration-500 ${i === currentSlide ? 'w-6 bg-amber-400' : 'w-1.5 bg-white/30'
+                                className={`h-1 rounded-full transition-all duration-500 ${i === currentSlide ? 'w-8 bg-amber-400' : 'w-2 bg-white/30'
                                     }`}
                             />
                         ))}
@@ -628,11 +560,57 @@ export default function CustomerMenuV3() {
         );
     }
 
-    // ==================== LANGUAGE SELECTION (Keep as fallback, but normally skipped) ====================
+    // ==================== LANGUAGE SELECTION ====================
     if (appState === 'language') {
-        // Auto-redirect to menu with default language since we merged screens
-        handleLanguageSelect('vi');
-        return null;
+        return (
+            <div className={`fixed inset-0 ${GRADIENTS.primary} flex items-center justify-center`}>
+                <div className="absolute inset-0 opacity-30">
+                    <div className="absolute top-20 left-20 w-72 h-72 bg-amber-500 rounded-full blur-[120px]" />
+                    <div className="absolute bottom-20 right-20 w-96 h-96 bg-orange-600 rounded-full blur-[150px]" />
+                </div>
+
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="relative z-10 text-center"
+                >
+                    <motion.div
+                        className="w-20 h-20 mx-auto mb-8 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-xl"
+                        animate={{ rotate: [0, 5, -5, 0] }}
+                        transition={{ duration: 4, repeat: Infinity }}
+                    >
+                        <span className="text-4xl">🍜</span>
+                    </motion.div>
+
+                    <h1 className="text-3xl font-light text-white mb-2">
+                        Chọn ngôn ngữ
+                    </h1>
+                    <p className="text-amber-200/60 mb-12 text-sm">言語を選択 • 选择语言</p>
+
+                    <div className="flex gap-6">
+                        {(['vi', 'jp', 'cn'] as Language[]).map((lang, i) => (
+                            <motion.button
+                                key={lang}
+                                initial={{ opacity: 0, y: 30 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2 + i * 0.1 }}
+                                whileHover={{ scale: 1.05, y: -5 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => handleLanguageSelect(lang)}
+                                className="group flex flex-col items-center gap-4 p-8 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 hover:border-amber-400/50 hover:bg-white/10 transition-all duration-300"
+                            >
+                                <span className="text-6xl group-hover:scale-110 transition-transform duration-300">
+                                    {LANG_LABELS[lang].flag}
+                                </span>
+                                <span className="text-lg text-white/80 group-hover:text-white font-medium">
+                                    {LANG_LABELS[lang].name}
+                                </span>
+                            </motion.button>
+                        ))}
+                    </div>
+                </motion.div>
+            </div>
+        );
     }
 
     // ==================== LOADING (3. Shimmer skeleton loading) ====================
@@ -743,11 +721,77 @@ export default function CustomerMenuV3() {
             )}
 
             {/* Main Content Layout */}
-
             <div className="flex flex-col h-full relative z-10 w-full transition-all duration-300">
 
-                {/* HEADER - Fixed Top */}
-                <div className="shrink-0 px-4 md:px-6 py-4 z-40">
+                {/* FLOATING MENU BUTTON (Middle Left Edge - Premium Glass Tab) */}
+                <motion.button
+                    className="fixed left-0 top-1/2 -translate-y-1/2 z-40 py-4 px-2 rounded-r-xl bg-stone-900/80 backdrop-blur-xl border-y border-r border-amber-500/30 shadow-xl shadow-amber-500/10 flex items-center justify-center hover:bg-stone-800 hover:border-amber-400/50 transition-all group"
+                    onClick={() => setShowCategoryMenu(true)}
+                    whileHover={{ x: 3, boxShadow: "0 0 15px rgba(245,158,11,0.3)" }}
+                    whileTap={{ scale: 0.95 }}
+                >
+                    <Menu className="w-5 h-5 text-amber-400 group-hover:text-amber-300" />
+                </motion.button>
+
+                {/* CATEGORY DRAWER */}
+                <AnimatePresence>
+                    {showCategoryMenu && (
+                        <>
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setShowCategoryMenu(false)}
+                                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+                            />
+                            <motion.div
+                                initial={{ x: '-100%' }}
+                                animate={{ x: 0 }}
+                                exit={{ x: '-100%' }}
+                                transition={{ type: 'tween', duration: 0.2, ease: 'easeOut' }}
+                                className="fixed left-0 top-0 bottom-0 w-64 bg-stone-900 border-r border-white/10 z-50 flex flex-col p-4 shadow-2xl"
+                            >
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-xl font-bold text-white pl-2">Thực đơn</h2>
+                                    <button onClick={() => setShowCategoryMenu(false)} className="p-2 rounded-full hover:bg-white/10 text-white">
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto no-scrollbar">
+                                    <div className="flex flex-wrap gap-2 p-2">
+                                        {categories.map(cat => (
+                                            <motion.button
+                                                key={cat.id}
+                                                onClick={() => scrollToCategory(cat.id)}
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                                className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/30 hover:border-amber-400/60 hover:from-amber-500/30 hover:to-orange-500/30 text-white transition-all duration-300 shadow-md hover:shadow-lg hover:shadow-amber-500/20"
+                                            >
+                                                <span className="text-xl">{cat.icon || '🍴'}</span>
+                                                <span className="font-medium text-sm">{cat.name}</span>
+                                                <span className="ml-1 px-2 py-0.5 rounded-full bg-white/20 text-xs font-bold text-amber-200">
+                                                    {cat.products?.length || 0}
+                                                </span>
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+                                {/* Quick Actions in Drawer too */}
+                                <div className="mt-4 pt-4 border-t border-white/10">
+                                    <button
+                                        onClick={() => { setShowCategoryMenu(false); setShowQuickActions(true); }}
+                                        className="w-full p-3 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 text-white font-bold flex items-center justify-center gap-2"
+                                    >
+                                        <Bell className="w-5 h-5" />
+                                        {t.callStaff}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
+                {/* Header with glowing border - Single Row */}
+                <div className="px-4 md:px-6 py-4">
                     <div className="flex items-center gap-3 p-2.5 rounded-2xl border-2 border-amber-500/40 bg-gradient-to-r from-amber-950/60 via-stone-900/80 to-amber-950/60 backdrop-blur-xl shadow-lg shadow-amber-500/20">
                         {/* Left: Logo */}
                         <div className="flex items-center gap-2 shrink-0">
@@ -775,6 +819,7 @@ export default function CustomerMenuV3() {
 
                         {/* Right: Actions */}
                         <div className="flex items-center gap-2 shrink-0">
+                            {/* Call Staff */}
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
@@ -784,6 +829,7 @@ export default function CustomerMenuV3() {
                                 <Bell className="w-5 h-5" />
                             </motion.button>
 
+                            {/* History Button */}
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
@@ -798,6 +844,7 @@ export default function CustomerMenuV3() {
                                 )}
                             </motion.button>
 
+                            {/* Language Button */}
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
@@ -810,383 +857,187 @@ export default function CustomerMenuV3() {
                     </div>
                 </div>
 
-                <div className="flex-1 flex overflow-hidden">
-                    {/* SIDEBAR (Desktop Only - Hidden on Mobile & Tablet) */}
-                    <div className="hidden lg:flex flex-col w-20 xl:w-64 shrink-0 bg-stone-900/40 backdrop-blur-lg border-r border-white/5 overflow-y-auto no-scrollbar py-4">
-                        {featured.length > 0 && !searchQuery && (
-                            <button
-                                onClick={() => scrollToCategory('featured')}
-                                className={`relative flex items-center gap-3 px-4 py-3 mx-2 transition-all duration-300 group hover:bg-white/5 rounded-lg ${activeCategory === 'featured' ? 'text-amber-50' : 'text-stone-400 hover:text-stone-200'}`}
-                            >
-                                {/* Emoji Icon */}
-                                <span className="text-xl shrink-0 group-hover:scale-110 transition-transform">✨</span>
-
-                                {/* Label */}
-                                <span className={`hidden xl:block text-sm text-left truncate transition-colors ${activeCategory === 'featured' ? 'font-semibold' : 'font-medium'}`}>
-                                    {t.featured}
-                                </span>
-
-                                {/* Active Underline Indicator */}
-                                {activeCategory === 'featured' && (
-                                    <motion.div
-                                        layoutId="active-underline"
-                                        className="absolute bottom-1 left-4 right-4 h-[2px] bg-gradient-to-r from-amber-500 via-amber-400 to-transparent rounded-full"
-                                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                                    />
-                                )}
-                            </button>
-                        )}
-                        {categories.map(cat => {
-                            const isActive = activeCategory === cat.id;
-                            return (
-                                <button
-                                    key={cat.id}
-                                    onClick={() => scrollToCategory(cat.id)}
-                                    className={`relative flex items-center gap-3 px-4 py-3 mx-2 transition-all duration-300 group hover:bg-white/5 rounded-lg ${isActive ? 'text-amber-50' : 'text-stone-400 hover:text-stone-200'}`}
-                                >
-                                    {/* Emoji Icon */}
-                                    <span className="text-xl shrink-0 group-hover:scale-110 transition-transform">{cat.icon || '🍜'}</span>
-
-                                    {/* Category Name */}
-                                    <span className={`hidden xl:block text-sm text-left truncate transition-colors ${isActive ? 'font-semibold' : 'font-medium'}`}>
-                                        {cat.name}
-                                    </span>
-
-                                    {/* Badge Count */}
-                                    {cat.products?.length > 0 && (
-                                        <span className={`hidden xl:flex ml-auto px-1.5 py-0.5 items-center justify-center rounded-full text-[10px] font-bold ${isActive ? 'bg-amber-500/25 text-amber-400' : 'bg-white/10 text-white/50'}`}>
-                                            {cat.products.length}
-                                        </span>
-                                    )}
-
-                                    {/* Active Underline Indicator */}
-                                    {isActive && (
-                                        <motion.div
-                                            layoutId="active-underline"
-                                            className="absolute bottom-1 left-4 right-4 h-[2px] bg-gradient-to-r from-amber-500 via-amber-400 to-transparent rounded-full"
-                                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                                        />
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    {/* MAIN FEED (Scrollable) */}
-                    <div
-                        id="main-scroll-container"
-                        ref={contentRef}
-                        className="flex-1 overflow-y-auto scroll-smooth no-scrollbar relative px-4 md:px-6 pb-20"
-                        onTouchStart={handleTouchStart}
-                        onTouchMove={handleTouchMove}
-                        onTouchEnd={handleTouchEnd}
-                        onScroll={(e) => {
-                            const container = e.currentTarget;
-                            const scrollTop = container.scrollTop;
-                            const headerOffset = 180;
-
-                            const featuredEl = document.getElementById('category-featured');
-                            if (featuredEl) {
-                                if (featuredEl.offsetTop <= scrollTop + headerOffset + 100 && featuredEl.offsetTop + featuredEl.offsetHeight > scrollTop + headerOffset) {
-                                    if (activeCategory !== 'featured') setActiveCategory('featured');
-                                }
-                            }
-
-                            for (const cat of filteredCategories) {
-                                const el = document.getElementById(`category-${cat.id}`);
-                                if (el) {
-                                    if (el.offsetTop <= scrollTop + headerOffset + 100 && el.offsetTop + el.offsetHeight > scrollTop + headerOffset) {
-                                        if (activeCategory !== cat.id) setActiveCategory(cat.id);
-                                    }
-                                }
-                            }
-                        }}
-                    >
-                        {/* FEATURED SECTION - Apple Style Carousel */}
-                        {featured.length > 0 && !searchQuery && (
-                            <div id="category-featured" className="scroll-mt-20 mb-8 mt-2">
-                                {/* Header */}
-                                <div className="flex items-center gap-3 mb-4 px-1">
-                                    <Sparkles className="w-5 h-5 text-amber-400" />
-                                    <h2 className="text-lg font-bold text-amber-100">{t.featured}</h2>
-                                </div>
-
-                                {/* Apple-style Horizontal Carousel */}
-                                <div className="relative">
-                                    <div
-                                        className="flex gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-2 -mx-4 px-4"
-                                        style={{ scrollBehavior: 'smooth' }}
-                                    >
-                                        {featured.map((product) => (
-                                            <motion.div
-                                                key={product.id}
-                                                whileTap={{ scale: 0.98 }}
-                                                onClick={() => {
-                                                    setSelectedProduct(product);
-                                                    setProductQuantity(1);
-                                                    setProductNotes([]);
-                                                }}
-                                                className="flex-shrink-0 w-[85%] md:w-[60%] lg:w-[45%] snap-center cursor-pointer"
-                                            >
-                                                <div className="relative rounded-3xl overflow-hidden bg-stone-800/60 border border-white/10 shadow-xl group">
-                                                    {/* Large Image - Apple Style 4:3 */}
-                                                    <div className="aspect-[4/3] relative overflow-hidden">
-                                                        {product.image_url ? (
-                                                            <img
-                                                                src={getImageUrl(product.image_url)!}
-                                                                alt={product.name}
-                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-full h-full bg-gradient-to-br from-stone-700 to-stone-800 flex items-center justify-center text-6xl">🍜</div>
-                                                        )}
-                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
-
-                                                        {/* Featured Badge */}
-                                                        <div className="absolute top-4 left-4">
-                                                            <div className="px-3 py-1.5 rounded-full bg-amber-500 text-black text-xs font-bold flex items-center gap-1.5 shadow-lg">
-                                                                <Star className="w-3.5 h-3.5 fill-black" /> おすすめ
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Info Overlay - Apple Style */}
-                                                    <div className="absolute bottom-0 left-0 right-0 p-5">
-                                                        <h4 className="text-white font-bold text-xl leading-tight mb-1 drop-shadow-lg">{product.name}</h4>
-                                                        {product.description && (
-                                                            <p className="text-white/70 text-sm line-clamp-1 mb-3">{product.description}</p>
-                                                        )}
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-amber-400 font-bold text-2xl drop-shadow-md">¥{product.price.toLocaleString()}</span>
-                                                            <motion.button
-                                                                whileHover={{ scale: 1.1 }}
-                                                                whileTap={{ scale: 0.9 }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    addToCart(product, 1, [], 0, e);
-                                                                }}
-                                                                className="w-12 h-12 rounded-full bg-amber-500 flex items-center justify-center text-black shadow-lg shadow-amber-500/30 hover:bg-amber-400 transition-colors"
-                                                            >
-                                                                <Plus className="w-6 h-6" strokeWidth={3} />
-                                                            </motion.button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </motion.div>
-                                        ))}
-                                    </div>
-
-                                    {/* Dots Indicator */}
-                                    {featured.length > 1 && (
-                                        <div className="flex justify-center gap-2 mt-4">
-                                            {featured.slice(0, 5).map((_, i) => (
-                                                <div key={i} className={`w-2 h-2 rounded-full transition-all ${i === 0 ? 'bg-amber-400 w-4' : 'bg-white/30'}`} />
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* CATEGORY SECTIONS (Sticky Headers) */}
-                        <div className="pb-32 space-y-8">
-                            {filteredCategories.map(cat => (
-                                <div key={cat.id} id={`category-${cat.id}`} className="scroll-mt-16 relative">
-                                    {/* STICKY HEADER - Hybrid (Minimal Line + Glassmorphism) */}
-                                    <div className="sticky top-0 z-30 bg-stone-900/80 backdrop-blur-lg -mx-4 md:-mx-6 px-4 md:px-6 py-3 transition-all duration-300 border-b border-white/5">
-                                        <div className="flex items-center justify-center gap-4 md:gap-6">
-                                            {/* Left Line - Gradient (thicker) */}
-                                            <div className="flex-1 h-[2px] bg-gradient-to-r from-transparent via-amber-500/40 to-amber-500/60" />
-
-                                            {/* Center Title */}
-                                            <div className="flex items-center gap-2.5 shrink-0">
-                                                <span className="text-xl">{cat.icon}</span>
-                                                <h3 className="text-base md:text-lg font-bold text-amber-50 uppercase tracking-wider">{cat.name}</h3>
-                                                <span className="px-2 py-0.5 rounded-full bg-amber-500/25 text-xs text-amber-400 font-bold">{cat.products.length}</span>
-                                            </div>
-
-                                            {/* Right Line - Gradient (thicker) */}
-                                            <div className="flex-1 h-[2px] bg-gradient-to-l from-transparent via-amber-500/40 to-amber-500/60" />
-                                        </div>
-                                    </div>
-
-                                    {/* PRODUCT GRID */}
-                                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 mt-4">
-                                        {cat.products.map(product => (
-                                            <motion.div
-                                                key={product.id}
-                                                layout
-                                                initial={{ opacity: 0, scale: 0.9 }}
-                                                animate={{ opacity: 1, scale: 1 }}
-                                                onClick={() => {
-                                                    setSelectedProduct(product);
-                                                    setProductQuantity(1);
-                                                    setProductNotes([]);
-                                                }}
-                                                className="group relative rounded-2xl overflow-hidden bg-stone-800/60 border border-white/10 cursor-pointer hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300"
-                                            >
-                                                {/* Square Image */}
-                                                <div className="aspect-square relative overflow-hidden bg-stone-700">
-                                                    {product.image_url ? (
-                                                        <img
-                                                            src={getImageUrl(product.image_url)!}
-                                                            alt={product.name}
-                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                        />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-5xl">🍜</div>
-                                                    )}
-
-                                                    {/* Badges */}
-                                                    <div className="absolute top-2 left-2 flex flex-col gap-1">
-                                                        {product.is_featured && (
-                                                            <div className="px-2 py-0.5 rounded-full bg-amber-500 text-black text-[10px] font-bold flex items-center gap-1">
-                                                                <Star className="w-2.5 h-2.5 fill-black" /> HOT
-                                                            </div>
-                                                        )}
-                                                        {product.is_best_seller && (
-                                                            <div className="px-2 py-0.5 rounded-full bg-green-500 text-black text-[10px] font-bold flex items-center gap-1">
-                                                                <Flame className="w-2.5 h-2.5" /> BEST
-                                                            </div>
-                                                        )}
-                                                        {product.is_chef_choice && (
-                                                            <div className="px-2 py-0.5 rounded-full bg-purple-500 text-white text-[10px] font-bold flex items-center gap-1">
-                                                                👨‍🍳 CHEF
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Floating + Button */}
-                                                    <motion.button
-                                                        whileHover={{ scale: 1.1 }}
-                                                        whileTap={{ scale: 0.9 }}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            addToCart(product, 1, [], 0, e);
-                                                        }}
-                                                        className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center text-black shadow-lg shadow-black/30 hover:bg-amber-400 transition-colors z-10"
-                                                    >
-                                                        <Plus className="w-5 h-5" strokeWidth={3} />
-                                                    </motion.button>
-                                                </div>
-
-                                                {/* Info Below - No Overlay */}
-                                                <div className="p-3 bg-stone-800/80">
-                                                    <h4 className="text-white font-semibold text-sm leading-tight line-clamp-2 mb-1">{product.name}</h4>
-                                                    {product.description && (
-                                                        <p className="text-white/40 text-[10px] line-clamp-1 mb-2">{product.description}</p>
-                                                    )}
-                                                    <span className="text-amber-400 font-bold text-base">¥{product.price.toLocaleString()}</span>
-                                                </div>
-                                            </motion.div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                            {filteredCategories.length === 0 && searchQuery && (
-                                <div className="text-center py-20">
-                                    <div className="text-4xl mb-2">🔍</div>
-                                    <p className="text-white/50">Không tìm thấy món nào cho "{searchQuery}"</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* FLOATING MENU BUTTON - (Mobile & Tablet, Hidden on Desktop) */}
-                <motion.button
-                    className="lg:hidden fixed left-0 top-1/2 -translate-y-1/2 z-40 py-4 px-2 rounded-r-xl bg-stone-900/80 backdrop-blur-xl border-y border-r border-amber-500/30 shadow-xl shadow-amber-500/10 flex items-center justify-center hover:bg-stone-800 hover:border-amber-400/50 transition-all group"
-                    onClick={() => setShowCategoryMenu(true)}
-                    whileHover={{ x: 3 }}
-                    whileTap={{ scale: 0.95 }}
+                {/* Content with Pull-to-Refresh handlers */}
+                <div
+                    ref={contentRef}
+                    className="flex-1 overflow-y-auto px-6 pb-6 no-scrollbar"
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
                 >
-                    <Menu className="w-5 h-5 text-amber-400" />
-                </motion.button>
+                    {/* Featured Section - Hero Banner Style (Style 2) */}
+                    {featured.length > 0 && !searchQuery && (
+                        <div className="mb-8">
+                            <div className="flex items-center gap-3 mb-5 px-2">
+                                <Sparkles className="w-5 h-5 text-amber-400" />
+                                <h2 className="text-xl font-semibold text-white">{t.featured}</h2>
+                            </div>
 
-                {/* MOBILE CATEGORY DRAWER */}
-                <AnimatePresence>
-                    {showCategoryMenu && (
-                        <>
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                onClick={() => setShowCategoryMenu(false)}
-                                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 lg:hidden"
-                            />
-                            <motion.div
-                                initial={{ x: '-100%' }}
-                                animate={{ x: 0 }}
-                                exit={{ x: '-100%' }}
-                                transition={{ type: 'tween', duration: 0.2, ease: 'easeOut' }}
-                                className="fixed left-0 top-0 bottom-0 w-72 bg-stone-900 border-r border-white/10 z-50 flex flex-col p-4 shadow-2xl lg:hidden"
-                            >
-                                <div className="flex items-center justify-between mb-6">
-                                    <h2 className="text-xl font-bold text-white pl-2">Thực đơn</h2>
-                                    <button onClick={() => setShowCategoryMenu(false)} className="p-2 rounded-full hover:bg-white/10 text-white">
-                                        <X className="w-5 h-5" />
-                                    </button>
-                                </div>
-                                <div className="flex-1 overflow-y-auto no-scrollbar">
-                                    <div className="flex flex-col gap-1">
-                                        {/* Featured */}
-                                        {featured.length > 0 && !searchQuery && (
-                                            <button
-                                                onClick={() => {
-                                                    scrollToCategory('featured');
-                                                    setShowCategoryMenu(false);
-                                                }}
-                                                className={`relative flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeCategory === 'featured' ? 'text-amber-50 bg-amber-500/10' : 'text-stone-400 hover:bg-white/5 hover:text-stone-200'}`}
-                                            >
-                                                <span className="text-xl">✨</span>
-                                                <span className={`font-medium ${activeCategory === 'featured' ? 'font-semibold' : ''}`}>{t.featured}</span>
-                                                {activeCategory === 'featured' && (
-                                                    <div className="absolute bottom-1 left-4 right-4 h-[2px] bg-gradient-to-r from-amber-500 via-amber-400 to-transparent rounded-full" />
-                                                )}
-                                            </button>
+                            {/* Hero Banner Container */}
+                            {/* Vertical Feed Container (TikTok Style) (Style 5) */}
+                            <div className="h-[500px] md:h-[600px] w-full rounded-3xl overflow-y-auto snap-y snap-mandatory no-scrollbar relative bg-stone-900 border border-white/10">
+                                {featured.map((product, index) => (
+                                    <div
+                                        key={product.id}
+                                        className="h-full w-full snap-center relative flex items-end justify-center group"
+                                        onClick={() => {
+                                            setSelectedProduct(product);
+                                            setProductQuantity(1);
+                                            setProductNotes([]);
+                                        }}
+                                    >
+                                        {/* Fullscreen Background */}
+                                        {product.image_url ? (
+                                            <img
+                                                src={getImageUrl(product.image_url)!}
+                                                alt={product.name}
+                                                className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-700"
+                                            />
+                                        ) : (
+                                            <div className="absolute inset-0 w-full h-full bg-stone-800 flex items-center justify-center">
+                                                <span className="text-8xl">🥘</span>
+                                            </div>
                                         )}
 
-                                        {/* Categories */}
-                                        {categories.map(cat => {
-                                            const isActive = activeCategory === cat.id;
-                                            return (
-                                                <button
-                                                    key={cat.id}
-                                                    onClick={() => {
-                                                        scrollToCategory(cat.id);
-                                                        setShowCategoryMenu(false);
-                                                    }}
-                                                    className={`relative flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive ? 'text-amber-50 bg-amber-500/10' : 'text-stone-400 hover:bg-white/5 hover:text-stone-200'}`}
-                                                >
-                                                    <span className="text-xl">{cat.icon || '🍜'}</span>
-                                                    <span className={`font-medium ${isActive ? 'font-semibold' : ''}`}>{cat.name}</span>
-                                                    <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${isActive ? 'bg-amber-500/25 text-amber-400' : 'bg-white/10 text-white/50'}`}>
-                                                        {cat.products.length}
-                                                    </span>
-                                                    {isActive && (
-                                                        <div className="absolute bottom-1 left-4 right-4 h-[2px] bg-gradient-to-r from-amber-500 via-amber-400 to-transparent rounded-full" />
-                                                    )}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </motion.div>
-                        </>
-                    )}
-                </AnimatePresence>
-            </div>
+                                        {/* Cinematic Gradient Overlay */}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-90" />
 
-            {/* Success Celebration - Auto dismiss after 5s */}
-            <SuccessCelebration
-                isOpen={showSuccessCelebration}
-                onClose={() => setShowSuccessCelebration(false)}
-                title={language === 'vi' ? 'Đặt hàng thành công!' : language === 'jp' ? '注文成功！' : '订单成功！'}
-                message={language === 'vi' ? 'Cảm ơn quý khách!' : language === 'jp' ? 'ありがとうございます！' : '感谢您！'}
-                subMessage={language === 'vi' ? 'Món ăn sẽ được phục vụ trong 10-15 phút' : language === 'jp' ? '10〜15分でお届けします' : '10-15分钟内送达'}
-                brandName={branding.name}
-                autoDismissMs={5000}
-            />
+                                        {/* Floating Content Card */}
+                                        <div className="relative mb-12 p-6 md:p-8 w-full max-w-lg text-center transform transition-transform duration-500 hover:scale-105">
+                                            {/* Badge */}
+                                            {product.featured_badge && (
+                                                <div className="flex justify-center mb-3">
+                                                    <span className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest backdrop-blur-md shadow-xl ${product.featured_badge === 'hot' ? 'bg-red-500/80 text-white' :
+                                                        product.featured_badge === 'new' ? 'bg-emerald-500/80 text-white' :
+                                                            'bg-amber-500/80 text-black'
+                                                        }`}>
+                                                        {product.featured_badge === 'hot' && <Flame className="w-3 h-3 flame-animate" />}
+                                                        {product.featured_badge}
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            <h3 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-amber-200 mb-2 drop-shadow-sm font-display">
+                                                {product.name}
+                                            </h3>
+
+                                            <p className="text-white/80 text-sm md:text-base mb-6 line-clamp-2 max-w-xs mx-auto">
+                                                {product.description}
+                                            </p>
+
+                                            <div className="flex items-center justify-center gap-4">
+                                                <span className="text-3xl font-bold text-amber-400">
+                                                    ¥{product.price.toLocaleString()}
+                                                </span>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        addToCart(product, 1, [], 0, e);
+                                                    }}
+                                                    className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:bg-amber-400 hover:scale-110 transition-all active:scale-95"
+                                                >
+                                                    <Plus className="w-6 h-6" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Scroll Indicator */}
+                                        {index < featured.length - 1 && (
+                                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 animate-bounce text-white/50">
+                                                <ChevronDown className="w-6 h-6" />
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Products Grid */}
+                    {filteredCategories.map(cat => (
+                        <div
+                            key={cat.id}
+                            id={`category-${cat.id}`}
+                            className="mb-10"
+                        >
+                            {/* Category Header - Centered with Gradient Lines */}
+                            <div className="flex items-center justify-center gap-6 mb-8">
+                                <div className="flex-1 h-0.5 bg-gradient-to-r from-transparent via-amber-400/70 to-amber-500/40 rounded-full" />
+                                <h2 className="text-xl md:text-2xl font-bold text-amber-100 tracking-[0.2em] uppercase px-2">
+                                    {cat.name}
+                                </h2>
+                                <div className="flex-1 h-0.5 bg-gradient-to-l from-transparent via-amber-400/70 to-amber-500/40 rounded-full" />
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                {cat.products.map((product, i) => (
+                                    <motion.div
+                                        key={product.id}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ duration: 0.15 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => {
+                                            setSelectedProduct(product);
+                                            setProductQuantity(1);
+                                            setProductNotes([]);
+                                        }}
+                                        className="group relative rounded-2xl overflow-hidden bg-stone-900 border border-white/10 cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-[0_0_20px_rgba(245,158,11,0.25)] will-change-transform"
+                                    >
+                                        {/* Image Container */}
+                                        <div className="aspect-[4/5] relative overflow-hidden">
+                                            {product.image_url ? (
+                                                <img
+                                                    src={getImageUrl(product.image_url)!}
+                                                    alt={product.name}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full bg-gradient-to-br from-stone-700 to-stone-800 flex items-center justify-center text-5xl">🍜</div>
+                                            )}
+
+                                            {/* Gradient Overlay - always visible for text readability */}
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+                                            {/* Price Badge - Top Right */}
+                                            <div className="absolute top-2 right-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-black text-sm font-bold shadow-lg shadow-amber-500/30">
+                                                ¥{product.price.toLocaleString()}
+                                            </div>
+
+                                            {/* HOT Badge - Top Left (4. Animated flame) */}
+                                            {product.is_best_seller && (
+                                                <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-gradient-to-r from-red-600 to-rose-500 text-white text-[10px] font-bold flex items-center gap-1 shadow-lg">
+                                                    <Flame className="w-3 h-3 flame-animate" /> HOT
+                                                </div>
+                                            )}
+
+                                            {/* Text Overlay with Glass Effect - Bottom */}
+                                            <div className="absolute bottom-0 left-0 right-0 p-3 bg-black/40 backdrop-blur-md border-t border-white/10">
+                                                <h3 className="text-white text-base font-bold mb-0.5 line-clamp-1 group-hover:text-amber-200 transition-colors">
+                                                    {product.name}
+                                                </h3>
+                                                {product.description && (
+                                                    <p className="text-white/50 text-xs line-clamp-1">{product.description}</p>
+                                                )}
+                                            </div>
+
+                                            {/* Quick Add Button - With Pulse Effect (1. Pulse effect) */}
+                                            <button
+                                                className="absolute bottom-14 right-2 w-11 h-11 rounded-full bg-amber-500 flex items-center justify-center text-black shadow-lg shadow-amber-500/40 hover:bg-amber-400 active:scale-95 transition-all btn-pulse"
+                                                onClick={e => {
+                                                    e.stopPropagation();
+                                                    addToCart(product, 1, [], 0, e);
+                                                }}
+                                            >
+                                                <Plus className="w-6 h-6" strokeWidth={2.5} />
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
 
             {/* Product Detail Modal */}
             <AnimatePresence>

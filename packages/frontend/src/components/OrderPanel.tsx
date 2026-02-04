@@ -5,9 +5,10 @@ import {
     X, Trash2, Receipt, CreditCard,
     QrCode, Users, Clock, Percent, PlusCircle, Loader2, Edit3, Plus, Minus, Scissors, Check, Search, Bell, Printer
 } from 'lucide-react';
-import CheckoutModal from './CheckoutModal';
+import FullscreenCheckout from './FullscreenCheckout';
 import ProductCard from './ProductCard';
 import { printReceipt } from '../utils/printReceipt';
+import { useToast } from './Toast';
 
 
 interface OrderPanelProps {
@@ -19,8 +20,9 @@ interface OrderPanelProps {
 }
 
 export default function OrderPanel({ table, categories, products, onClose, orderType = 'dine_in' }: OrderPanelProps) {
-    // Helper to detect if this is a virtual table (takeaway/retail)
-    const isVirtualTable = table.id.startsWith('takeaway-') || table.id.startsWith('retail-');
+    // Helper to detect if this is a virtual table (takeaway/retail or selected from order list)
+    const isVirtualTable = table.id.startsWith('takeaway-') || table.id.startsWith('retail-') || table.id.startsWith('order-');
+    const toast = useToast();
     const [order, setOrder] = useState<Order | null>(null);
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -60,6 +62,10 @@ export default function OrderPanel({ table, categories, products, onClose, order
     const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
     // Flag to prevent auto-create order during close (to avoid race condition)
     const isClosingRef = useRef(false);
+    // Debt order state
+    const [isMarkingDebt, setIsMarkingDebt] = useState(false);
+    const [showDebtModal, setShowDebtModal] = useState(false);
+    const [debtNote, setDebtNote] = useState('');
     // Refs to access current state in cleanup useEffect (closures would capture stale values)
     const orderRef = useRef<Order | null>(null);
     const orderItemsRef = useRef<OrderItem[]>([]);
@@ -207,10 +213,10 @@ export default function OrderPanel({ table, categories, products, onClose, order
                     setPendingAction(null);
                 }
             } else {
-                alert('PIN không đúng');
+                toast.error('PIN không đúng', 'Vui lòng nhập lại PIN chính xác');
             }
         } catch {
-            alert('PIN không đúng');
+            toast.error('PIN không đúng', 'Vui lòng nhập lại PIN chính xác');
         }
     };
 
@@ -242,6 +248,7 @@ export default function OrderPanel({ table, categories, products, onClose, order
         printReceipt({
             order: {
                 ...order,
+                order_number: String(order.order_number),
                 total: Number(order.total),
             },
             items: orderItems.map(i => ({
@@ -312,7 +319,7 @@ export default function OrderPanel({ table, categories, products, onClose, order
 
     const handleNoteOrder = () => {
         // Placeholder for order-level note
-        alert('Chức năng ghi chú đơn hàng đang phát triển');
+        toast.info('Đang phát triển', 'Chức năng ghi chú đơn hàng sẽ sớm ra mắt');
     };
 
     const handleEditNote = (item: OrderItem) => {
@@ -400,7 +407,7 @@ export default function OrderPanel({ table, categories, products, onClose, order
         } catch (error: unknown) {
             const err = error as { response?: { data?: { error?: { code?: string } } } };
             if (err.response?.data?.error?.code === 'PIN_REQUIRED') {
-                alert('Giảm giá > 10% cần PIN Manager!');
+                toast.warning('Cần xác thực', 'Giảm giá > 10% cần nhập PIN Manager');
             } else {
                 console.error('Error applying discount:', error);
             }
@@ -437,11 +444,11 @@ export default function OrderPanel({ table, categories, products, onClose, order
                 // Reset split mode
                 setSplitMode(false);
                 setSelectedSplitItems(new Set());
-                alert(`Đã tách ${selectedSplitItems.size} món sang bill mới (¥${Math.round(response.data.new_order.total || 0).toLocaleString()})`);
+                toast.success('Tách bill thành công!', `Đã tách ${selectedSplitItems.size} món sang bill mới (¥${Math.round(response.data.new_order.total || 0).toLocaleString()})`);
             }
         } catch (error) {
             console.error('Error splitting order:', error);
-            alert('Không thể tách bill');
+            toast.error('Không thể tách bill', 'Vui lòng thử lại sau');
         } finally {
             setIsSplitting(false);
         }
@@ -732,21 +739,16 @@ export default function OrderPanel({ table, categories, products, onClose, order
                     </div>
                     <div className="flex gap-2">
                         <button
-                            onClick={() => setShowDiscount(true)}
-                            className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center gap-1 text-slate-700 font-medium transition text-xs"
-                        >
-                            <Percent size={18} />
-                        </button>
-                        <button
                             onClick={() => {
                                 if (order) {
-                                    window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/receipt/${order.id}/print`, '_blank');
+                                    window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/receipt/${order.id}/print?type=preliminary`, '_blank');
                                 }
                             }}
                             disabled={!order || orderItems.length === 0}
-                            className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center gap-1 text-slate-700 font-medium transition text-xs disabled:opacity-50"
+                            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center gap-2 text-slate-700 font-medium transition text-xs disabled:opacity-50"
                         >
-                            <Receipt size={18} />
+                            <Receipt size={16} />
+                            <span>In tạm tính</span>
                         </button>
                         <button
                             onClick={() => {
@@ -778,83 +780,78 @@ export default function OrderPanel({ table, categories, products, onClose, order
                                 <div
                                     key={item.id}
                                     onClick={() => splitMode && toggleSplitItem(item.id)}
-                                    className={`flex items-center gap-3 p-3 rounded-xl transition-all ${splitMode
+                                    className={`flex items-center gap-3 py-3 border-b border-slate-100 last:border-0 transition-all ${splitMode
                                         ? selectedSplitItems.has(item.id)
-                                            ? 'bg-blue-100 border border-blue-400'
-                                            : 'bg-slate-50 border border-slate-200 hover:bg-slate-100 cursor-pointer'
-                                        : 'bg-slate-50 group relative'
+                                            ? 'bg-blue-50 -mx-2 px-2 rounded-lg'
+                                            : 'hover:bg-slate-50 cursor-pointer -mx-2 px-2 rounded-lg'
+                                        : 'group relative hover:bg-slate-50 -mx-2 px-2 rounded-lg'
                                         }`}
                                 >
                                     {splitMode && (
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedSplitItems.has(item.id)}
-                                            readOnly
-                                            className="w-5 h-5 text-blue-600 rounded border-slate-300"
-                                        />
+                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition ${selectedSplitItems.has(item.id) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'}`}>
+                                            {selectedSplitItems.has(item.id) && <Check size={14} strokeWidth={3} />}
+                                        </div>
                                     )}
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <p className="font-medium text-slate-800">{item.product_name_vi || item.open_item_name}</p>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <p className="font-semibold text-slate-800 text-sm truncate">{item.product_name_vi || item.open_item_name}</p>
                                             {/* Kitchen Status Badge */}
                                             {item.display_in_kitchen ? (
                                                 item.kitchen_status === 'pending' ? (
-                                                    <span className="px-1.5 py-0.5 text-[9px] font-medium bg-yellow-100 text-yellow-700 rounded">
-                                                        Chờ gửi
-                                                    </span>
+                                                    <span className="w-2 h-2 rounded-full bg-amber-400" title="Chờ gửi bếp"></span>
                                                 ) : item.kitchen_status === 'preparing' ? (
-                                                    <span className="px-1.5 py-0.5 text-[9px] font-medium bg-blue-100 text-blue-700 rounded">
-                                                        Đang nấu
-                                                    </span>
+                                                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" title="Đang nấu"></span>
                                                 ) : item.kitchen_status === 'ready' ? (
-                                                    <span className="px-1.5 py-0.5 text-[9px] font-medium bg-green-100 text-green-700 rounded">
-                                                        Sẵn sàng
-                                                    </span>
+                                                    <span className="w-2 h-2 rounded-full bg-emerald-500" title="Sẵn sàng"></span>
                                                 ) : null
-                                            ) : (
-                                                <span className="px-1.5 py-0.5 text-[9px] font-medium bg-slate-100 text-slate-500 rounded">
-                                                    Không bếp
+                                            ) : null}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs">
+                                            <p className="text-slate-500">¥{item.unit_price?.toLocaleString()}</p>
+
+                                            {item.note && (
+                                                <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-1 max-w-[120px] truncate">
+                                                    <Edit3 size={10} /> {item.note}
                                                 </span>
                                             )}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {item.note && <p className="text-xs text-slate-500 italic">Ghi chú: {item.note}</p>}
+
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleEditNote(item); }}
-                                                className="p-1 text-blue-400 hover:text-blue-600 rounded bg-blue-50"
+                                                className="text-slate-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                title="Sửa ghi chú"
                                             >
                                                 <Edit3 size={12} />
                                             </button>
                                         </div>
-                                        <p className="text-sm text-slate-600">¥{item.unit_price?.toLocaleString()}</p>
                                     </div>
 
                                     {!splitMode && (
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleUpdateQuantity(item, item.quantity - 1); }}
-                                                className="w-8 h-8 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100"
+                                                className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:shadow-sm rounded-md transition"
                                             >
-                                                <Minus size={16} />
+                                                <Minus size={14} />
                                             </button>
-                                            <span className="font-bold text-slate-800 w-6 text-center">{item.quantity}</span>
+                                            <span className="font-bold text-slate-700 w-6 text-center text-sm">{item.quantity}</span>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleUpdateQuantity(item, item.quantity + 1); }}
-                                                className="w-8 h-8 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100"
+                                                className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:shadow-sm rounded-md transition"
                                             >
-                                                <Plus size={16} />
+                                                <Plus size={14} />
                                             </button>
                                         </div>
                                     )}
 
-                                    <div className="text-right ml-2">
-                                        <p className="font-bold text-slate-900">¥{(item.unit_price * item.quantity).toLocaleString()}</p>
+                                    <div className="text-right ml-1">
+                                        <p className="font-bold text-slate-900 text-sm">¥{(item.unit_price * item.quantity).toLocaleString()}</p>
                                         {!splitMode && item.kitchen_status === 'pending' && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleRemoveItem(item.id); }}
-                                                className="text-red-500 hover:text-red-700 text-xs mt-1 block w-full text-right"
+                                                className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
+                                                title="Xóa món"
                                             >
-                                                Xóa
+                                                <X size={14} />
                                             </button>
                                         )}
                                     </div>
@@ -906,49 +903,64 @@ export default function OrderPanel({ table, categories, products, onClose, order
 
                     {/* Action buttons - only show for open orders */}
                     {order?.status === 'open' ? (
-                        <div className="grid grid-cols-5 gap-2">
-                            <button
-                                onClick={() => setSplitMode(true)}
-                                className="col-span-1 flex flex-col items-center justify-center p-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition"
-                            >
-                                <Scissors size={20} className="mb-1" />
-                                <span className="text-[10px] font-medium">Tách</span>
-                            </button>
-                            <button
-                                onClick={handleNoteOrder}
-                                className="col-span-1 flex flex-col items-center justify-center p-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition"
-                            >
-                                <Edit3 size={20} className="mb-1" />
-                                <span className="text-[10px] font-medium">Ghi chú</span>
-                            </button>
+                        <div className="flex flex-col gap-3">
+                            {/* Utility Row - Secondary Actions */}
+                            <div className="grid grid-cols-3 gap-2">
+                                <button
+                                    onClick={() => setSplitMode(true)}
+                                    className="flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition shadow-sm"
+                                >
+                                    <Scissors size={16} />
+                                    <span className="text-sm font-medium">Tách</span>
+                                </button>
+                                <button
+                                    onClick={handleNoteOrder}
+                                    className="flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition shadow-sm"
+                                >
+                                    <Edit3 size={16} />
+                                    <span className="text-sm font-medium">Ghi chú</span>
+                                </button>
+                                <button
+                                    onClick={() => setShowDebtModal(true)}
+                                    disabled={!order || orderItems.length === 0}
+                                    className="flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
+                                >
+                                    <CreditCard size={16} />
+                                    <span className="text-sm font-medium">Ghi nợ</span>
+                                </button>
+                            </div>
 
-                            {/* GỬI BẾP Button */}
-                            <button
-                                onClick={handleSendToKitchen}
-                                disabled={!order || pendingKitchenCount === 0 || isSendingToKitchen}
-                                className="col-span-1 flex flex-col items-center justify-center p-2 bg-orange-500 text-white rounded-xl hover:bg-orange-600 disabled:bg-slate-200 disabled:text-slate-400 transition relative"
-                            >
-                                {isSendingToKitchen ? (
-                                    <Loader2 size={20} className="mb-1 animate-spin" />
-                                ) : (
-                                    <Bell size={20} className="mb-1" />
-                                )}
-                                <span className="text-[10px] font-medium">Gửi bếp</span>
-                                {pendingKitchenCount > 0 && (
-                                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                                        {pendingKitchenCount}
-                                    </span>
-                                )}
-                            </button>
+                            {/* Primary Action Row */}
+                            <div className="grid grid-cols-5 gap-2 h-14">
+                                {/* GỬI BẾP Button - 2 cols */}
+                                <button
+                                    onClick={handleSendToKitchen}
+                                    disabled={!order || pendingKitchenCount === 0 || isSendingToKitchen}
+                                    className="col-span-2 flex items-center justify-center gap-2 bg-orange-500 text-white rounded-xl hover:bg-orange-600 disabled:bg-slate-200 disabled:text-slate-400 transition relative font-bold shadow-md shadow-orange-100"
+                                >
+                                    {isSendingToKitchen ? (
+                                        <Loader2 size={24} className="animate-spin" />
+                                    ) : (
+                                        <Bell size={24} />
+                                    )}
+                                    <span className="text-sm">GỬI BẾP</span>
+                                    {pendingKitchenCount > 0 && (
+                                        <span className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                                            {pendingKitchenCount}
+                                        </span>
+                                    )}
+                                </button>
 
-                            <button
-                                onClick={() => setShowCheckout(true)}
-                                disabled={!order || orderItems.length === 0}
-                                className="col-span-2 bg-indigo-600 text-white rounded-xl flex flex-col items-center justify-center py-2 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition shadow-lg shadow-indigo-200"
-                            >
-                                <span className="text-sm font-bold">THANH TOÁN</span>
-                                {order && <span className="text-xs opacity-90">¥{Number(order.total).toLocaleString()}</span>}
-                            </button>
+                                {/* THANH TOÁN Button - 3 cols */}
+                                <button
+                                    onClick={() => setShowCheckout(true)}
+                                    disabled={!order || orderItems.length === 0}
+                                    className="col-span-3 bg-indigo-600 text-white rounded-xl flex flex-col items-center justify-center hover:bg-indigo-700 disabled:bg-slate-200 disabled:cursor-not-allowed transition shadow-md shadow-indigo-200"
+                                >
+                                    <span className="text-base font-bold">THANH TOÁN</span>
+                                    {order && <span className="text-xs opacity-90 font-medium">¥{Number(order.total).toLocaleString()}</span>}
+                                </button>
+                            </div>
                         </div>
                     ) : order ? (
                         /* Show status badge for completed orders */
@@ -975,10 +987,27 @@ export default function OrderPanel({ table, categories, products, onClose, order
                                     <span className="font-bold">ĐÃ HỦY</span>
                                 </div>
                             )}
+                            {order.status === 'debt' && (
+                                <>
+                                    <div className="flex items-center gap-2 px-6 py-3 bg-amber-100 text-amber-700 rounded-xl">
+                                        <span className="text-lg">💳</span>
+                                        <span className="font-bold">KHÁCH NỢ</span>
+                                        <span className="text-sm opacity-75">¥{Number(order.total).toLocaleString()}</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowCheckout(true)}
+                                        className="flex items-center gap-2 px-4 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition"
+                                    >
+                                        <CreditCard size={20} />
+                                        <span className="font-medium">Thu tiền</span>
+                                    </button>
+                                </>
+                            )}
                         </div>
                     ) : null}
                 </div>
             </div>
+
 
             {/* Open Item Modal */}
             {showOpenItem && (
@@ -1340,13 +1369,15 @@ export default function OrderPanel({ table, categories, products, onClose, order
             {/* Checkout Modal */}
             {
                 showCheckout && order && (
-                    <CheckoutModal
+                    <FullscreenCheckout
                         order={order}
                         items={orderItems}
                         tableName={table.name}
                         onClose={() => setShowCheckout(false)}
-                        onSuccess={async () => {
-                            await api.closeTable(table.id);
+                        onSuccess={() => {
+                            // Don't auto-close table - let backend handle session management
+                            // Split orders may still exist, table map will refresh and show remaining orders
+                            setShowCheckout(false);
                             onClose();
                         }}
                     />
@@ -1409,6 +1440,79 @@ export default function OrderPanel({ table, categories, products, onClose, order
                     </div>
                 </div>
             )}
+
+            {/* Debt Modal - Mark order as debt */}
+            {showDebtModal && order && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                💳 Đánh dấu Khách Nợ
+                            </h3>
+                            <button
+                                onClick={() => { setShowDebtModal(false); setDebtNote(''); }}
+                                className="p-2 hover:bg-slate-100 rounded-lg"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                            <div className="flex justify-between items-center">
+                                <span className="text-amber-700 font-medium">Tổng tiền nợ:</span>
+                                <span className="text-2xl font-bold text-amber-700">¥{Number(order.total).toLocaleString()}</span>
+                            </div>
+                        </div>
+
+                        <p className="text-sm text-slate-500 mb-4">
+                            Bàn sẽ được reset về trống. Khách có thể thanh toán sau từ mục "Orders Nợ".
+                        </p>
+
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-slate-600 mb-1">Ghi chú (tên khách, SĐT...)</label>
+                            <input
+                                type="text"
+                                value={debtNote}
+                                onChange={(e) => setDebtNote(e.target.value)}
+                                placeholder="VD: Anh Tuấn - 090xxx"
+                                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setShowDebtModal(false); setDebtNote(''); }}
+                                className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    if (!order) return;
+                                    setIsMarkingDebt(true);
+                                    try {
+                                        await api.markOrderAsDebt(order.id, debtNote || undefined);
+                                        setShowDebtModal(false);
+                                        setDebtNote('');
+                                        onClose(); // Close and refresh table map
+                                    } catch (error) {
+                                        console.error('Failed to mark as debt:', error);
+                                        toast.error('Không thể đánh dấu khách nợ', 'Vui lòng thử lại sau');
+                                    } finally {
+                                        setIsMarkingDebt(false);
+                                    }
+                                }}
+                                disabled={isMarkingDebt}
+                                className="flex-1 px-4 py-3 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isMarkingDebt ? <Loader2 className="animate-spin" size={18} /> : <CreditCard size={18} />}
+                                Xác nhận Nợ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }
+

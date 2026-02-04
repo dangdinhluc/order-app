@@ -356,6 +356,18 @@ class ApiService {
         });
     }
 
+    // Debt Orders (Khách nợ)
+    async markOrderAsDebt(orderId: string, note?: string, pin?: string) {
+        return this.request<{ order_id: string; status: string; message: string }>(`/api/orders/${orderId}/mark-debt`, {
+            method: 'POST',
+            body: JSON.stringify({ note, pin }),
+        });
+    }
+
+    async getDebtOrders() {
+        return this.request<{ orders: Order[]; total: number; total_amount: number }>('/api/orders/debt');
+    }
+
     // Delete empty order (no items) - used for auto-cleanup of takeaway/retail
     async deleteEmptyOrder(orderId: string) {
         return this.request<{ message: string }>(`/api/orders/${orderId}`, {
@@ -423,6 +435,32 @@ class ApiService {
         return this.request<{ order: Order }>(`/api/orders/${orderId}/pay`, {
             method: 'POST',
             body: JSON.stringify({ payments, voucher_code }),
+        });
+    }
+
+    async payOrderPartial(
+        orderId: string,
+        itemIds: string[],
+        payments: PaymentInput[],
+        discountAmount?: number,
+        discountReason?: string
+    ) {
+        return this.request<{
+            paid_order?: Order;
+            original_order?: Order;
+            is_partial: boolean;
+            paid_items_count?: number;
+            remaining_items_count?: number;
+            remaining_total?: number;
+            message: string;
+        }>(`/api/orders/${orderId}/pay-partial`, {
+            method: 'POST',
+            body: JSON.stringify({
+                item_ids: itemIds,
+                payments,
+                discount_amount: discountAmount,
+                discount_reason: discountReason
+            }),
         });
     }
 
@@ -790,7 +828,7 @@ export interface Order {
     order_number: number;
     table_id: string;
     order_type?: 'dine_in' | 'takeaway' | 'retail';
-    status: 'open' | 'pending_payment' | 'paid' | 'cancelled';
+    status: 'open' | 'pending_payment' | 'paid' | 'cancelled' | 'debt';
     subtotal: number;
     discount_amount: number;
     surcharge_amount: number;

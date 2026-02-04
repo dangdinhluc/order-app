@@ -357,11 +357,15 @@ router.post('/:id/items', async (req: AuthRequest, res: Response, next: NextFunc
                 throw new ApiError('Product is sold out', 400, 'PRODUCT_SOLD_OUT');
             }
 
+            // Explicitly convert display_in_kitchen to boolean (fix for PostgreSQL type issues)
+            const displayInKitchen = product.display_in_kitchen === true || product.display_in_kitchen === 'true' || product.display_in_kitchen === 't';
+            console.log(`[POS Order] Product: ${product.name_vi}, display_in_kitchen raw: ${product.display_in_kitchen} (${typeof product.display_in_kitchen}), converted: ${displayInKitchen}`);
+
             const itemResult = await query(
                 `INSERT INTO order_items (order_id, product_id, quantity, unit_price, display_in_kitchen, note)
          VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING *`,
-                [orderId, data.product_id, data.quantity, product.price, product.display_in_kitchen, data.note || null]
+                [orderId, data.product_id, data.quantity, product.price, displayInKitchen, data.note || null]
             );
 
             // Include product names in response for cart display
@@ -715,10 +719,47 @@ router.post('/:id/pay', async (req: AuthRequest, res: Response, next: NextFuncti
 
         await client.query('COMMIT');
 
+        // 4. Check if ALL orders in this session are now completed (paid/cancelled)
+        // Only close session if no remaining open orders
+        if (order.table_session_id) {
+            const remainingOpenOrders = await query(
+                `SELECT id FROM orders 
+                 WHERE table_session_id = $1 
+                 AND status NOT IN ('paid', 'cancelled')`,
+                [order.table_session_id]
+            );
+
+            if (remainingOpenOrders.rows.length === 0) {
+                // All orders paid/cancelled - close session
+                await query(
+                    `UPDATE table_sessions 
+                     SET status = 'completed', ended_at = NOW() 
+                     WHERE id = $1`,
+                    [order.table_session_id]
+                );
+
+                // 5. Reset table status to available
+                if (order.table_id) {
+                    await query(
+                        `UPDATE tables SET status = 'available', current_order_id = NULL WHERE id = $1`,
+                        [order.table_id]
+                    );
+                }
+            }
+        }
+
         // Emit socket event
         const io: SocketIOServer = req.app.get('io');
         if (io) {
             io.emit('order:paid', { orderId, total: finalTotal });
+
+            // Notify POS about table closure
+            if (order.table_id) {
+                io.to('pos-room').emit('table:closed', {
+                    table_id: order.table_id,
+                    order_id: orderId
+                });
+            }
         }
 
         // Log audit
@@ -736,6 +777,264 @@ router.post('/:id/pay', async (req: AuthRequest, res: Response, next: NextFuncti
             message: 'Payment successful',
             data: { order: updatedOrder.rows[0] }
         });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        next(error);
+    } finally {
+        client.release();
+    }
+});
+
+// POST /api/orders/:id/pay-partial - Pay for selected items only (split and pay in one transaction)
+router.post('/:id/pay-partial', async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const client = await getClient();
+
+    try {
+        const { id: orderId } = req.params;
+        const { item_ids, payments, discount_amount, discount_reason } = req.body;
+        // item_ids: Array of order_item IDs to pay for
+        // payments: Array of payment methods (same as /pay)
+        // discount_amount, discount_reason: Optional discount for this partial payment
+
+        if (!item_ids || !Array.isArray(item_ids) || item_ids.length === 0) {
+            throw new ApiError('No items selected for payment', 400, 'INVALID_REQUEST');
+        }
+
+        if (!payments || !Array.isArray(payments) || payments.length === 0) {
+            throw new ApiError('Payment method required', 400, 'INVALID_REQUEST');
+        }
+
+        await client.query('BEGIN');
+
+        // 1. Get original order
+        const orderResult = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
+        if (orderResult.rows.length === 0) {
+            throw new ApiError('Order not found', 404, 'NOT_FOUND');
+        }
+
+        const originalOrder = orderResult.rows[0];
+
+        if (originalOrder.status === 'paid') {
+            throw new ApiError('Order already fully paid', 400, 'ALREADY_PAID');
+        }
+
+        // 2. Get all items in this order
+        const allItemsResult = await client.query(
+            'SELECT * FROM order_items WHERE order_id = $1',
+            [orderId]
+        );
+        const allItems = allItemsResult.rows;
+
+        // 3. Get selected items
+        const selectedItemsResult = await client.query(
+            'SELECT * FROM order_items WHERE id = ANY($1) AND order_id = $2',
+            [item_ids, orderId]
+        );
+        const selectedItems = selectedItemsResult.rows;
+
+        if (selectedItems.length !== item_ids.length) {
+            throw new ApiError('Some items not found in this order', 400, 'INVALID_ITEMS');
+        }
+
+        // 4. Calculate total for selected items
+        const selectedSubtotal = selectedItems.reduce((sum, item) =>
+            sum + (Number(item.quantity) * Number(item.unit_price)), 0);
+
+        // Apply discount if provided
+        const finalDiscount = Number(discount_amount) || 0;
+        const selectedTotal = selectedSubtotal - finalDiscount;
+
+        // 5. Validate payment amount
+        let totalPaid = 0;
+        for (const payment of payments) {
+            totalPaid += Number(payment.amount);
+        }
+
+        if (totalPaid < selectedTotal - 0.5) {
+            throw new ApiError(`Insufficient payment. Need ${selectedTotal}, got ${totalPaid}`, 400, 'INSUFFICIENT_PAYMENT');
+        }
+
+        // 6. Check if paying ALL items (full payment, not partial)
+        const isFullPayment = allItems.length === selectedItems.length;
+
+        if (isFullPayment) {
+            // Full payment - just use regular pay logic
+            // Insert payments
+            const savedPayments = [];
+            for (const payment of payments) {
+                const paymentResult = await client.query(
+                    `INSERT INTO payments (order_id, method, amount, received_amount, change_amount, reference)
+                     VALUES ($1, $2, $3, $4, $5, $6)
+                     RETURNING *`,
+                    [orderId, payment.method, payment.amount, payment.received_amount || null, payment.change_amount || null, payment.reference || null]
+                );
+                savedPayments.push(paymentResult.rows[0]);
+            }
+
+            // Update order to paid
+            const updatedOrder = await client.query(
+                `UPDATE orders 
+                 SET status = 'paid', paid_at = NOW(),
+                     discount_amount = COALESCE(discount_amount, 0) + $2,
+                     discount_reason = COALESCE(discount_reason || ' | ', '') || COALESCE($3, ''),
+                     total = subtotal - discount_amount - $2 + surcharge_amount
+                 WHERE id = $1 
+                 RETURNING *`,
+                [orderId, finalDiscount, discount_reason || null]
+            );
+
+            await client.query('COMMIT');
+
+            // Check if ALL orders in session are completed before closing
+            if (originalOrder.table_session_id) {
+                const remainingOpenOrders = await query(
+                    `SELECT id FROM orders 
+                     WHERE table_session_id = $1 
+                     AND status NOT IN ('paid', 'cancelled')`,
+                    [originalOrder.table_session_id]
+                );
+
+                if (remainingOpenOrders.rows.length === 0) {
+                    await query(
+                        `UPDATE table_sessions 
+                         SET status = 'completed', ended_at = NOW() 
+                         WHERE id = $1`,
+                        [originalOrder.table_session_id]
+                    );
+
+                    if (originalOrder.table_id) {
+                        await query(
+                            `UPDATE tables SET status = 'available', current_order_id = NULL WHERE id = $1`,
+                            [originalOrder.table_id]
+                        );
+                    }
+                }
+            }
+
+            // Emit socket event
+            const io: SocketIOServer = req.app.get('io');
+            if (io) {
+                io.emit('order:paid', { orderId, total: selectedTotal });
+                if (originalOrder.table_id) {
+                    io.to('pos-room').emit('table:closed', {
+                        table_id: originalOrder.table_id,
+                        order_id: orderId
+                    });
+                }
+            }
+
+            res.json({
+                success: true,
+                message: 'Full payment successful',
+                data: {
+                    order: updatedOrder.rows[0],
+                    is_partial: false
+                }
+            });
+        } else {
+            // PARTIAL PAYMENT - Create new order for paid items, keep original open
+
+            // 7. Create new order for the paid items
+            const paidOrderResult = await client.query(
+                `INSERT INTO orders (table_id, table_session_id, user_id, note, subtotal, total, status, paid_at, discount_amount, discount_reason)
+                 VALUES ($1, $2, $3, $4, $5, $6, 'paid', NOW(), $7, $8)
+                 RETURNING *`,
+                [
+                    originalOrder.table_id,
+                    originalOrder.table_session_id,
+                    req.user?.id,
+                    `Thanh toán 1 phần từ đơn #${originalOrder.order_number || orderId}`,
+                    selectedSubtotal,
+                    selectedTotal,
+                    finalDiscount,
+                    discount_reason || null
+                ]
+            );
+            const paidOrder = paidOrderResult.rows[0];
+
+            // 8. Move selected items to the new paid order
+            await client.query(
+                'UPDATE order_items SET order_id = $1 WHERE id = ANY($2)',
+                [paidOrder.id, item_ids]
+            );
+
+            // 9. Insert payments for the paid order
+            const savedPayments = [];
+            for (const payment of payments) {
+                const paymentResult = await client.query(
+                    `INSERT INTO payments (order_id, method, amount, received_amount, change_amount, reference)
+                     VALUES ($1, $2, $3, $4, $5, $6)
+                     RETURNING *`,
+                    [paidOrder.id, payment.method, payment.amount, payment.received_amount || null, payment.change_amount || null, payment.reference || null]
+                );
+                savedPayments.push(paymentResult.rows[0]);
+            }
+
+            // 10. Recalculate original order (remaining items)
+            const remainingItemsResult = await client.query(
+                'SELECT SUM(quantity * unit_price) as subtotal FROM order_items WHERE order_id = $1',
+                [orderId]
+            );
+            const remainingSubtotal = Number(remainingItemsResult.rows[0].subtotal) || 0;
+
+            const updatedOriginalOrder = await client.query(
+                `UPDATE orders 
+                 SET subtotal = $1, total = $1 + surcharge_amount
+                 WHERE id = $2 
+                 RETURNING *`,
+                [remainingSubtotal, orderId]
+            );
+
+            await client.query('COMMIT');
+
+            // Log audit
+            await logAudit({
+                userId: req.user?.id,
+                action: 'partial_payment',
+                targetType: 'order',
+                targetId: orderId,
+                newValue: {
+                    paid_items: item_ids,
+                    paid_total: selectedTotal,
+                    new_order_id: paidOrder.id,
+                    remaining_total: remainingSubtotal
+                },
+                ipAddress: req.ip,
+            });
+
+            // Emit socket events
+            const io: SocketIOServer = req.app.get('io');
+            if (io) {
+                // Notify about partial payment
+                io.emit('order:partial_paid', {
+                    original_order_id: orderId,
+                    paid_order_id: paidOrder.id,
+                    paid_items: item_ids.length,
+                    paid_total: selectedTotal,
+                    remaining_total: remainingSubtotal,
+                    remaining_items: allItems.length - selectedItems.length
+                });
+
+                // Notify POS to refresh the order
+                io.to('pos-room').emit('order:updated', {
+                    order_id: orderId,
+                    remaining_total: remainingSubtotal
+                });
+            }
+
+            res.json({
+                success: true,
+                message: `Đã thanh toán ${selectedItems.length} món. Còn lại ${allItems.length - selectedItems.length} món.`,
+                data: {
+                    paid_order: paidOrder,
+                    original_order: updatedOriginalOrder.rows[0],
+                    is_partial: true,
+                    paid_items_count: selectedItems.length,
+                    remaining_items_count: allItems.length - selectedItems.length,
+                    remaining_total: remainingSubtotal
+                }
+            });
+        }
     } catch (error) {
         await client.query('ROLLBACK');
         next(error);
@@ -1028,6 +1327,148 @@ router.post('/:id/send-to-kitchen', async (req: AuthRequest, res: Response, next
     }
 });
 
+// =============================================
+// DEBT ORDERS (Khách Nợ)
+// =============================================
+
+// GET /api/orders/debt - Get all debt orders
+router.get('/debt', async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await query(`
+            SELECT 
+                o.*,
+                t.number as table_number,
+                t.name as table_name,
+                u.name as cashier_name,
+                dm.name as debt_marked_by_name,
+                (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
+            FROM orders o
+            LEFT JOIN tables t ON o.table_id = t.id
+            LEFT JOIN users u ON o.user_id = u.id
+            LEFT JOIN users dm ON o.debt_marked_by = dm.id
+            WHERE o.status = 'debt'
+            ORDER BY o.debt_marked_at DESC
+        `);
+
+        res.json({
+            success: true,
+            data: {
+                orders: result.rows,
+                total: result.rows.length,
+                total_amount: result.rows.reduce((sum: number, o: any) => sum + parseFloat(o.total || 0), 0)
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/orders/:id/mark-debt - Mark order as debt
+router.post('/:id/mark-debt', async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const client = await getClient();
+    try {
+        const { id: orderId } = req.params;
+        const { note, pin } = req.body;
+
+        // Verify PIN
+        if (pin) {
+            const pinResult = await client.query(
+                'SELECT id, name, role FROM users WHERE pin_code = $1 AND is_active = true',
+                [pin]
+            );
+            if (pinResult.rows.length === 0) {
+                throw new ApiError('Invalid PIN', 401, 'INVALID_PIN');
+            }
+        }
+
+        await client.query('BEGIN');
+
+        // Get order
+        const orderResult = await client.query(
+            'SELECT * FROM orders WHERE id = $1 FOR UPDATE',
+            [orderId]
+        );
+
+        if (orderResult.rows.length === 0) {
+            throw new ApiError('Order not found', 404, 'NOT_FOUND');
+        }
+
+        const order = orderResult.rows[0];
+
+        if (order.status === 'paid') {
+            throw new ApiError('Cannot mark paid order as debt', 400, 'ORDER_PAID');
+        }
+
+        if (order.status === 'cancelled') {
+            throw new ApiError('Cannot mark cancelled order as debt', 400, 'ORDER_CANCELLED');
+        }
+
+        if (order.status === 'debt') {
+            throw new ApiError('Order is already marked as debt', 400, 'ALREADY_DEBT');
+        }
+
+        // Mark as debt
+        await client.query(`
+            UPDATE orders 
+            SET status = 'debt',
+                debt_marked_at = NOW(),
+                debt_marked_by = $2,
+                debt_note = $3
+            WHERE id = $1
+        `, [orderId, req.user?.id, note || null]);
+
+        // Close the table session if exists
+        if (order.table_session_id) {
+            await client.query(`
+                UPDATE table_sessions 
+                SET ended_at = NOW(), status = 'completed' 
+                WHERE id = $1 AND ended_at IS NULL
+            `, [order.table_session_id]);
+        }
+
+        // Reset table if exists
+        if (order.table_id) {
+            await client.query(`
+                UPDATE tables 
+                SET status = 'available', current_order_id = NULL 
+                WHERE id = $1
+            `, [order.table_id]);
+        }
+
+        await client.query('COMMIT');
+
+        // Log audit
+        logAudit(client, {
+            user_id: req.user?.id || null,
+            action: 'MARK_DEBT',
+            resource_type: 'order',
+            resource_id: orderId,
+            details: { order_number: order.order_number, total: order.total, note }
+        });
+
+        // Emit socket event
+        const io: SocketIOServer = req.app.get('io');
+        if (io) {
+            io.emit('order:debt', { order_id: orderId, order_number: order.order_number });
+            if (order.table_id) {
+                io.to('pos-room').emit('table:closed', { table_id: order.table_id });
+            }
+        }
+
+        res.json({
+            success: true,
+            message: 'Order marked as debt successfully',
+            data: { order_id: orderId, status: 'debt' }
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        next(error);
+    } finally {
+        client.release();
+    }
+});
+
 // Helper function to recalculate order total
 async function recalculateOrderTotal(orderId: string) {
     const itemsResult = await query(
@@ -1046,3 +1487,4 @@ async function recalculateOrderTotal(orderId: string) {
 }
 
 export { router as ordersRouter };
+

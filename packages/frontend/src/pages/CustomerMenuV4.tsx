@@ -262,6 +262,7 @@ export default function CustomerMenuV4() {
     const [productQuantity, setProductQuantity] = useState(1);
     const [productNotes, setProductNotes] = useState<string[]>([]);
     const [addedToCart, setAddedToCart] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastActivityRef = useRef<number>(Date.now());
@@ -396,6 +397,43 @@ export default function CustomerMenuV4() {
     const getCartItemQuantity = (productId: string) => {
         const item = cart.find(i => i.product.id === productId);
         return item?.quantity || 0;
+    };
+
+    // Handle order submission
+    const handleOrder = async () => {
+        if (!tableId || cart.length === 0) return;
+        setIsSubmitting(true);
+
+        const items = cart.map(item => ({
+            product_id: item.product.id,
+            quantity: item.quantity,
+            notes: item.notes.join(', ')
+        }));
+
+        try {
+            const res = await fetch(`${API_BASE}/api/customer/order`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    table_id: tableId,
+                    items,
+                    notes: ''
+                })
+            });
+
+            if (!res.ok) throw new Error('Failed to create order');
+
+            // Success
+            setCart([]);
+            setShowCart(false);
+            alert(language === 'vi' ? 'Đã gửi đơn hàng thành công!' : language === 'jp' ? '注文が送信されました！' : '订单已发送！');
+            fetchMenu(language); // Refresh to get updated session
+        } catch (err) {
+            console.error(err);
+            alert(language === 'vi' ? 'Lỗi gửi đơn hàng!' : language === 'jp' ? '注文の送信に失敗しました！' : '发送订单失败！');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
@@ -819,15 +857,15 @@ export default function CustomerMenuV4() {
                                     key={product.id}
                                     variants={itemVariants}
                                     whileHover={{ y: -4, boxShadow: '0 0 20px rgba(249, 115, 22, 0.3)' }}
-                                    className="group rounded-xl overflow-hidden bg-slate-900/90 backdrop-blur-sm border border-orange-500/40 hover:border-orange-500/70 cursor-pointer transition-all duration-300 shadow-lg shadow-orange-500/10"
+                                    className="group rounded-lg overflow-hidden bg-slate-900/90 backdrop-blur-sm border border-orange-500/40 hover:border-orange-500/70 cursor-pointer transition-all duration-300 shadow-lg shadow-orange-500/10"
                                     onClick={() => {
                                         setSelectedProduct(product);
                                         setProductQuantity(1);
                                         setProductNotes([]);
                                     }}
                                 >
-                                    {/* Image */}
-                                    <div className="aspect-[4/3] relative overflow-hidden">
+                                    {/* Image - smaller aspect ratio for 3 cols */}
+                                    <div className="aspect-square relative overflow-hidden">
                                         {product.image_url ? (
                                             <img
                                                 src={getImageUrl(product.image_url)!}
@@ -835,7 +873,7 @@ export default function CustomerMenuV4() {
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                             />
                                         ) : (
-                                            <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-4xl">🍜</div>
+                                            <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-2xl sm:text-4xl">🍜</div>
                                         )}
 
                                         {/* Added toast */}
@@ -847,21 +885,20 @@ export default function CustomerMenuV4() {
                                                     exit={{ opacity: 0, scale: 0.5 }}
                                                     className="absolute inset-0 bg-green-500/90 flex items-center justify-center"
                                                 >
-                                                    <span className="text-white font-bold text-lg">✓ Đã thêm!</span>
+                                                    <span className="text-white font-bold text-xs sm:text-lg">✓ Đã thêm!</span>
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
 
                                         {/* Badges - Top Left (Mockup Style) */}
                                         {product.is_best_seller && (
-                                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-red-500 text-white text-[10px] font-bold shadow">
+                                            <div className="absolute top-1 left-1 px-1 py-0.5 rounded bg-red-500 text-white text-[8px] sm:text-[10px] font-bold shadow">
                                                 HOT
                                             </div>
                                         )}
                                         {product.featured_badge === 'discount' && (
-                                            <div className="absolute top-2 left-2 px-2 py-1 rounded bg-gradient-to-br from-orange-500 to-red-500 text-white text-[9px] font-bold leading-tight text-center">
-                                                <span className="block">Giảm giá</span>
-                                                <span className="block text-xs">10% OFF</span>
+                                            <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-gradient-to-br from-orange-500 to-red-500 text-white text-[7px] sm:text-[9px] font-bold leading-tight text-center">
+                                                <span className="block">-10%</span>
                                             </div>
                                         )}
 
@@ -870,61 +907,61 @@ export default function CustomerMenuV4() {
                                             <motion.button
                                                 whileHover={{ scale: 1.1 }}
                                                 whileTap={{ scale: 0.9 }}
-                                                className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center text-white shadow-lg"
+                                                className="absolute bottom-1 right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-orange-500 flex items-center justify-center text-white shadow-lg"
                                                 onClick={e => {
                                                     e.stopPropagation();
                                                     quickAddToCart(product);
                                                 }}
                                             >
-                                                <Plus className="w-4 h-4" />
+                                                <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
                                             </motion.button>
                                         )}
                                     </div>
 
-                                    {/* Info Section with Price and Quantity Controls */}
-                                    <div className="p-2.5 pt-2">
-                                        <h3 className="text-white text-sm font-medium mb-1.5 line-clamp-1 leading-tight">
+                                    {/* Info Section - Compact for 3col */}
+                                    <div className="p-1.5 sm:p-2.5">
+                                        <h3 className="text-white text-[10px] sm:text-sm font-medium mb-0.5 sm:mb-1.5 line-clamp-1 leading-tight">
                                             {product.name}
                                         </h3>
                                         <div className="flex items-center justify-between">
-                                            <p className="text-orange-400 font-bold text-sm">
-                                                ₫{product.price.toLocaleString()}
+                                            <p className="text-orange-400 font-bold text-[10px] sm:text-sm">
+                                                ¥{product.price.toLocaleString()}
                                             </p>
-                                            {/* Quantity Controls - Right side below image (Mockup Style) */}
+                                            {/* Quantity Controls - Compact for 3col */}
                                             {inCartQty > 0 ? (
                                                 <div
-                                                    className="flex items-center gap-1"
+                                                    className="flex items-center gap-0.5 sm:gap-1"
                                                     onClick={e => e.stopPropagation()}
                                                 >
                                                     <motion.button
                                                         whileHover={{ scale: 1.1 }}
                                                         whileTap={{ scale: 0.9 }}
                                                         onClick={() => updateCartQuantity(product.id, -1)}
-                                                        className="w-6 h-6 rounded-full border border-orange-500 bg-transparent flex items-center justify-center text-orange-400"
+                                                        className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-orange-500 bg-transparent flex items-center justify-center text-orange-400"
                                                     >
-                                                        <Minus className="w-3 h-3" />
+                                                        <Minus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                                                     </motion.button>
-                                                    <span className="text-white font-medium text-sm w-5 text-center">{inCartQty}</span>
+                                                    <span className="text-white font-medium text-[10px] sm:text-sm w-4 sm:w-5 text-center">{inCartQty}</span>
                                                     <motion.button
                                                         whileHover={{ scale: 1.1 }}
                                                         whileTap={{ scale: 0.9 }}
                                                         onClick={() => updateCartQuantity(product.id, 1)}
-                                                        className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-white"
+                                                        className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-orange-500 flex items-center justify-center text-white"
                                                     >
-                                                        <Plus className="w-3 h-3" />
+                                                        <Plus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                                                     </motion.button>
                                                 </div>
                                             ) : (
                                                 <motion.button
                                                     whileHover={{ scale: 1.1 }}
                                                     whileTap={{ scale: 0.9 }}
-                                                    className="w-6 h-6 rounded-full bg-orange-500/20 border border-orange-500/50 flex items-center justify-center text-orange-400"
+                                                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-orange-500/20 border border-orange-500/50 flex items-center justify-center text-orange-400"
                                                     onClick={e => {
                                                         e.stopPropagation();
                                                         quickAddToCart(product);
                                                     }}
                                                 >
-                                                    <Plus className="w-3 h-3" />
+                                                    <Plus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                                                 </motion.button>
                                             )}
                                         </div>
@@ -968,65 +1005,75 @@ export default function CustomerMenuV4() {
                 <Bell className="w-6 h-6" />
             </motion.button>
 
-            {/* Product Detail Modal */}
+            {/* Product Detail Bottom Sheet */}
             <AnimatePresence>
                 {selectedProduct && (
                     <>
+                        {/* Overlay */}
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             onClick={() => setSelectedProduct(null)}
-                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
                         />
+                        {/* Bottom Sheet */}
                         <motion.div
-                            initial={{ opacity: 0, y: 100, scale: 0.9 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 100, scale: 0.9 }}
-                            className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-xl bg-slate-900 rounded-3xl z-50 overflow-hidden flex flex-col border border-white/10 shadow-2xl"
+                            initial={{ y: "100%" }}
+                            animate={{ y: 0 }}
+                            exit={{ y: "100%" }}
+                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                            className="fixed bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl z-50 overflow-hidden border-t border-white/10 shadow-2xl max-h-[70vh]"
                         >
-                            {/* Close */}
-                            <motion.button
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={() => setSelectedProduct(null)}
-                                className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white border border-white/20"
-                            >
-                                <X className="w-5 h-5" />
-                            </motion.button>
-
-                            {/* Image */}
-                            <div className="h-56 md:h-72 shrink-0 relative">
-                                {selectedProduct.image_url ? (
-                                    <img
-                                        src={getImageUrl(selectedProduct.image_url)!}
-                                        alt={selectedProduct.name}
-                                        className="w-full h-full object-cover"
-                                    />
-                                ) : (
-                                    <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-7xl">🍜</div>
-                                )}
-                                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
+                            {/* Drag Handle */}
+                            <div className="flex justify-center pt-3 pb-2">
+                                <div className="w-12 h-1.5 bg-white/30 rounded-full" />
                             </div>
 
-                            {/* Content */}
-                            <div className="flex-1 overflow-y-auto p-6 -mt-10 relative">
-                                <h2 className="text-2xl font-bold text-white mb-2">{selectedProduct.name}</h2>
-                                <p className="text-3xl font-bold text-orange-400 mb-4">₫{selectedProduct.price.toLocaleString()}</p>
+                            {/* Content - Horizontal Layout */}
+                            <div className="px-4 pb-4">
+                                <div className="flex gap-4 mb-4">
+                                    {/* Image - Compact */}
+                                    <div className="w-24 h-24 shrink-0 rounded-2xl overflow-hidden bg-slate-800">
+                                        {selectedProduct.image_url ? (
+                                            <img
+                                                src={getImageUrl(selectedProduct.image_url)!}
+                                                alt={selectedProduct.name}
+                                                className="w-full h-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-4xl">🍜</div>
+                                        )}
+                                    </div>
 
-                                {selectedProduct.description && (
-                                    <p className="text-white/60 mb-6 leading-relaxed">{selectedProduct.description}</p>
-                                )}
+                                    {/* Info */}
+                                    <div className="flex-1 min-w-0">
+                                        <h2 className="text-xl font-bold text-white mb-1 truncate">{selectedProduct.name}</h2>
+                                        <p className="text-2xl font-bold text-orange-400 mb-2">¥{selectedProduct.price.toLocaleString()}</p>
 
-                                {/* Quick Notes */}
+                                        {selectedProduct.description && (
+                                            <p className="text-white/50 text-sm line-clamp-2">{selectedProduct.description}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Close Button */}
+                                    <motion.button
+                                        whileTap={{ scale: 0.9 }}
+                                        onClick={() => setSelectedProduct(null)}
+                                        className="w-8 h-8 shrink-0 rounded-full bg-white/10 flex items-center justify-center text-white/60"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </motion.button>
+                                </div>
+
+                                {/* Quick Notes - Horizontal Chips */}
                                 {quickNotes[selectedProduct.id]?.length > 0 && (
-                                    <div className="mb-6">
-                                        <h3 className="text-white/80 font-medium mb-3">{t.notes}</h3>
+                                    <div className="mb-4">
+                                        <p className="text-white/60 text-sm mb-2">{t.notes}</p>
                                         <div className="flex flex-wrap gap-2">
                                             {quickNotes[selectedProduct.id].map(note => (
                                                 <motion.button
                                                     key={note.id}
-                                                    whileHover={{ scale: 1.05 }}
                                                     whileTap={{ scale: 0.95 }}
                                                     onClick={() => {
                                                         setProductNotes(prev =>
@@ -1035,15 +1082,15 @@ export default function CustomerMenuV4() {
                                                                 : [...prev, note.label]
                                                         );
                                                     }}
-                                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${productNotes.includes(note.label)
+                                                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${productNotes.includes(note.label)
                                                         ? 'bg-orange-500 text-white'
-                                                        : 'bg-white/10 text-white/70 border border-white/20 hover:border-orange-400/50'
+                                                        : 'bg-white/10 text-white/70 border border-white/20'
                                                         }`}
                                                 >
                                                     {note.label}
                                                     {note.price_modifier !== 0 && (
                                                         <span className="ml-1 opacity-70">
-                                                            {note.price_modifier > 0 ? '+' : ''}₫{note.price_modifier}
+                                                            {note.price_modifier > 0 ? '+' : ''}¥{note.price_modifier}
                                                         </span>
                                                     )}
                                                 </motion.button>
@@ -1052,42 +1099,37 @@ export default function CustomerMenuV4() {
                                     </div>
                                 )}
 
-                                {/* Quantity */}
-                                <div className="flex items-center justify-between">
-                                    <span className="text-white/80 font-medium">{t.quantity}</span>
-                                    <div className="flex items-center gap-4 bg-white/10 rounded-2xl p-1">
+                                {/* Quantity + Add Button Row */}
+                                <div className="flex items-center gap-3">
+                                    {/* Quantity Selector */}
+                                    <div className="flex items-center gap-2 bg-white/10 rounded-xl p-1">
                                         <motion.button
-                                            whileHover={{ scale: 1.1 }}
                                             whileTap={{ scale: 0.9 }}
                                             onClick={() => setProductQuantity(q => Math.max(1, q - 1))}
-                                            className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-white"
+                                            className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-white"
                                         >
-                                            <Minus className="w-5 h-5" />
+                                            <Minus className="w-4 h-4" />
                                         </motion.button>
-                                        <span className="text-2xl font-bold text-white w-10 text-center">{productQuantity}</span>
+                                        <span className="text-xl font-bold text-white w-8 text-center">{productQuantity}</span>
                                         <motion.button
-                                            whileHover={{ scale: 1.1 }}
                                             whileTap={{ scale: 0.9 }}
                                             onClick={() => setProductQuantity(q => q + 1)}
-                                            className="w-12 h-12 rounded-xl bg-orange-500 flex items-center justify-center text-white"
+                                            className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center text-white"
                                         >
-                                            <Plus className="w-5 h-5" />
+                                            <Plus className="w-4 h-4" />
                                         </motion.button>
                                     </div>
-                                </div>
-                            </div>
 
-                            {/* Add Button */}
-                            <div className="p-4 border-t border-white/10">
-                                <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    onClick={() => addToCart(selectedProduct, productQuantity, productNotes)}
-                                    className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl font-bold text-lg text-white flex items-center justify-center gap-3 shadow-lg shadow-orange-500/30"
-                                >
-                                    <ShoppingCart className="w-5 h-5" />
-                                    {t.addToCart} • ₫{(selectedProduct.price * productQuantity).toLocaleString()}
-                                </motion.button>
+                                    {/* Add to Cart Button */}
+                                    <motion.button
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => addToCart(selectedProduct, productQuantity, productNotes)}
+                                        className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl font-bold text-white flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30"
+                                    >
+                                        <ShoppingCart className="w-5 h-5" />
+                                        <span>{t.addToCart} • ¥{(selectedProduct.price * productQuantity).toLocaleString()}</span>
+                                    </motion.button>
+                                </div>
                             </div>
                         </motion.div>
                     </>
@@ -1193,9 +1235,18 @@ export default function CustomerMenuV4() {
                                     <motion.button
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
-                                        className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl font-bold text-lg text-white shadow-lg shadow-orange-500/30"
+                                        onClick={handleOrder}
+                                        disabled={isSubmitting}
+                                        className={`w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl font-bold text-lg text-white flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                                     >
-                                        {t.order}
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                {language === 'vi' ? 'Đang gửi...' : t.loading}
+                                            </>
+                                        ) : (
+                                            t.order
+                                        )}
                                     </motion.button>
                                 </div>
                             )}

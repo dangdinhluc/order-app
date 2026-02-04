@@ -5,6 +5,8 @@ const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 class SocketService {
     private socket: Socket | null = null;
     private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
+    private pendingEmits: Array<{ event: string; data: unknown }> = [];
+    private onConnectCallbacks: Array<() => void> = [];
 
     connect() {
         if (this.socket?.connected) return;
@@ -16,19 +18,27 @@ class SocketService {
 
         this.socket.on('connect', () => {
             console.log('🔌 Socket connected');
-        });
 
-        this.socket.on('disconnect', () => {
-            console.log('🔌 Socket disconnected');
-        });
-
-        // Re-register listeners on reconnect
-        this.socket.on('connect', () => {
+            // Re-register all listeners
             this.listeners.forEach((callbacks, event) => {
                 callbacks.forEach(callback => {
                     this.socket?.on(event, callback);
                 });
             });
+
+            // Process pending emits that were queued before connection
+            this.pendingEmits.forEach(({ event, data }) => {
+                this.socket?.emit(event, data);
+            });
+            this.pendingEmits = [];
+
+            // Call onConnect callbacks
+            this.onConnectCallbacks.forEach(cb => cb());
+            this.onConnectCallbacks = [];
+        });
+
+        this.socket.on('disconnect', () => {
+            console.log('🔌 Socket disconnected');
         });
     }
 
@@ -38,11 +48,23 @@ class SocketService {
     }
 
     joinRoom(room: 'pos' | 'kitchen' | 'boss', userId: string) {
-        this.socket?.emit(`join:${room}`, { userId });
+        const event = `join:${room}`;
+        const data = { userId };
+        if (this.socket?.connected) {
+            this.socket.emit(event, data);
+        } else {
+            this.pendingEmits.push({ event, data });
+        }
     }
 
     joinTable(sessionToken: string) {
-        this.socket?.emit('join:table', { sessionToken });
+        const event = 'join:table';
+        const data = { sessionToken };
+        if (this.socket?.connected) {
+            this.socket.emit(event, data);
+        } else {
+            this.pendingEmits.push({ event, data });
+        }
     }
 
     on(event: string, callback: (data: unknown) => void) {
@@ -50,7 +72,10 @@ class SocketService {
             this.listeners.set(event, new Set());
         }
         this.listeners.get(event)?.add(callback);
-        this.socket?.on(event, callback);
+        // Register immediately if connected, will also be re-registered on reconnect via connect handler
+        if (this.socket?.connected) {
+            this.socket.on(event, callback);
+        }
     }
 
     off(event: string, callback: (data: unknown) => void) {
@@ -59,7 +84,11 @@ class SocketService {
     }
 
     emit(event: string, data: unknown) {
-        this.socket?.emit(event, data);
+        if (this.socket?.connected) {
+            this.socket.emit(event, data);
+        } else {
+            this.pendingEmits.push({ event, data });
+        }
     }
 }
 
