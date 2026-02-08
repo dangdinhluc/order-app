@@ -281,6 +281,17 @@ router.delete('/:id', async (req: AuthRequest, res: Response, next: NextFunction
 // POST /api/orders - Create order
 router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
+        const localId = req.header('X-Local-Id');
+
+        // Idempotency check: if localId is provided, check if it already exists in the sync queue or orders
+        if (localId) {
+            const existingSync = await query('SELECT payload FROM offline_sync_queue WHERE local_id = $1 AND status = \'synced\'', [localId]);
+            if (existingSync.rows.length > 0) {
+                // Already synced, return existing order data if possible or just success
+                return res.json({ success: true, message: 'Already synced', data: { offline: true, localId } });
+            }
+        }
+
         const data = createOrderSchema.parse(req.body);
         const userId = req.user?.id;
 
@@ -312,6 +323,58 @@ router.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => 
         res.status(201).json({
             success: true,
             data: { order: result.rows[0] },
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PATCH /api/orders/:id/customer - Link/unlink customer to order
+router.patch('/:id/customer', async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const { id: orderId } = req.params;
+        const { customer_id } = req.body;
+
+        // Check order exists
+        const orderResult = await query(
+            'SELECT * FROM orders WHERE id = $1',
+            [orderId]
+        );
+
+        if (orderResult.rows.length === 0) {
+            throw new ApiError('Order not found', 404, 'NOT_FOUND');
+        }
+
+        // Validate customer exists if provided
+        if (customer_id) {
+            const customerResult = await query(
+                'SELECT id, name, phone, loyalty_points FROM customers WHERE id = $1',
+                [customer_id]
+            );
+
+            if (customerResult.rows.length === 0) {
+                throw new ApiError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
+            }
+        }
+
+        // Update order
+        const result = await query(
+            `UPDATE orders SET customer_id = $1 WHERE id = $2 RETURNING *`,
+            [customer_id || null, orderId]
+        );
+
+        // Notify via socket
+        const io: SocketIOServer = req.app.get('io');
+        if (io) {
+            io.to('pos-room').emit('order:customer_updated', {
+                orderId,
+                customer_id
+            });
+        }
+
+        res.json({
+            success: true,
+            data: { order: result.rows[0] }
         });
     } catch (error) {
         next(error);
@@ -1102,7 +1165,14 @@ router.post('/:id/cancel', async (req: AuthRequest, res: Response, next: NextFun
         }
 
         // Log audit
-        await logAudit(req, 'cancel_order', 'order', orderId, order, reason);
+        await logAudit({
+            userId: req.user?.id,
+            action: 'cancel_order',
+            targetType: 'order',
+            targetId: orderId,
+            oldValue: order,
+            reason: reason
+        });
 
         // Notify via socket
         const io: SocketIOServer = req.app.get('io');
@@ -1438,12 +1508,12 @@ router.post('/:id/mark-debt', async (req: AuthRequest, res: Response, next: Next
         await client.query('COMMIT');
 
         // Log audit
-        logAudit(client, {
-            user_id: req.user?.id || null,
+        logAudit({
+            userId: req.user?.id,
             action: 'MARK_DEBT',
-            resource_type: 'order',
-            resource_id: orderId,
-            details: { order_number: order.order_number, total: order.total, note }
+            targetType: 'order',
+            targetId: orderId,
+            newValue: { order_number: order.order_number, total: order.total, note }
         });
 
         // Emit socket event

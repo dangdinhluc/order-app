@@ -1,6 +1,18 @@
+import { offlineStore } from '../utils/offlineStore';
+import { v4 as uuidv4 } from 'uuid';
+
 const API_URL = import.meta.env.VITE_API_URL || '';
 // API Service for Order App
 
+
+
+export interface Language {
+    code: string;
+    name: string;
+    flag_icon: string;
+    is_active: boolean;
+    is_default: boolean;
+}
 
 interface ApiResponse<T> {
     success: boolean;
@@ -51,7 +63,14 @@ class ApiService {
                 credentials: 'include',
             });
 
-            const data = await response.json();
+            // Handle non-JSON responses or empty responses
+            const contentType = response.headers.get('content-type');
+            let data;
+            if (contentType && contentType.includes('application/json')) {
+                data = await response.json();
+            } else {
+                data = { success: response.ok };
+            }
 
             if (!response.ok) {
                 throw new Error(data.error?.message || 'An error occurred');
@@ -60,6 +79,28 @@ class ApiService {
             return data;
         } catch (error) {
             console.error('API Error:', error);
+
+            // Fallback to offline storage for critical POST/PUT/DELETE requests
+            const isCriticalAction = options.method && ['POST', 'PUT', 'DELETE'].includes(options.method);
+            const isNetworkError = error instanceof TypeError && error.message === 'Failed to fetch';
+
+            if (isCriticalAction && isNetworkError) {
+                console.warn('📡 Network error detected. Saving request to offline queue...');
+                const localId = uuidv4();
+                await offlineStore.add({
+                    localId,
+                    endpoint,
+                    method: options.method as string,
+                    body: options.body ? JSON.parse(options.body as string) : null,
+                });
+
+                // Return a "fake" success to keep the UI running
+                return {
+                    success: true,
+                    data: { offline: true, localId } as any
+                };
+            }
+
             throw error;
         }
     }
@@ -726,6 +767,112 @@ class ApiService {
             body: JSON.stringify({ items }),
         });
     }
+
+    // Loyalty
+    async getLoyaltyTiers() {
+        return this.request<{ data: any[] }>(`/api/loyalty/tiers`);
+    }
+
+    async getLoyaltyRewards() {
+        return this.request<{ data: any[] }>(`/api/loyalty/rewards`);
+    }
+
+    async getLoyaltyStats() {
+        return this.request<{ data: any }>(`/api/loyalty/stats`);
+    }
+
+    async createLoyaltyTier(data: any) {
+        return this.request<{ data: any }>(`/api/loyalty/tiers`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async updateLoyaltyTier(id: string, data: any) {
+        return this.request<{ data: any }>(`/api/loyalty/tiers/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async createLoyaltyReward(data: any) {
+        return this.request<{ data: any }>(`/api/loyalty/rewards`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async updateLoyaltyReward(id: string, data: any) {
+        return this.request<{ data: any }>(`/api/loyalty/rewards/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async deleteLoyaltyReward(id: string) {
+        return this.request<{ success: boolean }>(`/api/loyalty/rewards/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
+    async getCustomerLoyalty(customerId: string) {
+        return this.request<{ data: any }>(`/api/loyalty/customers/${customerId}`);
+    }
+
+    async earnLoyaltyPoints(customerId: string, orderId: string, amount: number) {
+        return this.request<{ data: any }>(`/api/loyalty/customers/${customerId}/earn`, {
+            method: 'POST',
+            body: JSON.stringify({ order_id: orderId, amount }),
+        });
+    }
+
+    async redeemLoyaltyReward(customerId: string, rewardId: string) {
+        return this.request<{ data: any }>(`/api/loyalty/customers/${customerId}/redeem`, {
+            method: 'POST',
+            body: JSON.stringify({ reward_id: rewardId }),
+        });
+    }
+
+    // Customer search for POS
+    async searchCustomers(query?: string, limit = 20) {
+        const params = new URLSearchParams();
+        if (query) params.append('q', query);
+        params.append('limit', limit.toString());
+        return this.request<{ data: Customer[] }>(`/api/loyalty/customers?${params.toString()}`);
+    }
+
+    async createCustomer(data: { name: string; phone?: string; email?: string; birthday?: string }) {
+        return this.request<{ data: Customer }>('/api/loyalty/customers', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async linkOrderCustomer(orderId: string, customerId: string | null) {
+        return this.request<{ data: { order: Order } }>(`/api/orders/${orderId}/customer`, {
+            method: 'PATCH',
+            body: JSON.stringify({ customer_id: customerId }),
+        });
+    }
+
+    // Languages
+    async getLanguages() {
+        return this.request<{ languages: Language[] }>('/api/languages');
+    }
+
+    async createLanguage(data: Partial<Language>) {
+        return this.request<Language>('/api/languages', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async updateLanguage(code: string, data: Partial<Language>) {
+        return this.request<Language>(`/api/languages/${code}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    }
 }
 
 // Types
@@ -743,6 +890,7 @@ export interface Category {
     name_ja?: string;
     name_en?: string;
     sort_order: number;
+    name_translations?: Record<string, string>;
 }
 
 export interface Product {
@@ -752,6 +900,8 @@ export interface Product {
     name_vi: string;
     name_ja?: string;
     name_en?: string;
+    name_translations?: Record<string, string>;
+    description_translations?: Record<string, string>;
     price: number;
     display_in_kitchen: boolean;
     is_available: boolean;
@@ -827,6 +977,7 @@ export interface Order {
     id: string;
     order_number: number;
     table_id: string;
+    customer_id?: string;
     order_type?: 'dine_in' | 'takeaway' | 'retail';
     status: 'open' | 'pending_payment' | 'paid' | 'cancelled' | 'debt';
     subtotal: number;
@@ -985,5 +1136,21 @@ export interface SalesTotals {
 }
 
 // deleted misplaced code
+
+export interface Customer {
+    id: string;
+    name: string;
+    phone?: string;
+    email?: string;
+    birthday?: string;
+    loyalty_points?: number;
+    lifetime_points?: number;
+    tier_id?: string;
+    tier_name?: string;
+    tier_icon?: string;
+    tier_color?: string;
+    referral_code?: string;
+    created_at?: string;
+}
 
 export const api = new ApiService();

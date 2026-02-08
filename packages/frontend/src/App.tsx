@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { syncManager } from './utils/syncManager';
 import { ToastProvider } from './components/Toast';
 import { DialogProvider } from './components/ui/DialogProvider';
 import Layout from './components/Layout';
@@ -25,6 +27,12 @@ import CustomerMenuV2 from './pages/CustomerMenuV2';
 import CustomerMenuV3 from './pages/CustomerMenuV3';
 import Reports from './pages/Reports';
 import CustomerSettings from './pages/admin/CustomerSettings';
+import LoyaltySettings from './pages/admin/LoyaltySettings';
+import ScheduleCalendar from './pages/admin/ScheduleCalendar';
+import TimeClock from './pages/admin/TimeClock';
+import AnalyticsDashboard from './pages/admin/AnalyticsDashboard';
+import OfflineIndicator from './components/OfflineIndicator';
+import InstallPWA from './components/InstallPWA';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children, roles }: { children: ReactNode; roles?: string[] }) {
@@ -225,6 +233,46 @@ function AppRoutes() {
         }
       />
 
+      <Route path="/admin/loyalty"
+        element={
+          <ProtectedRoute roles={['owner']}>
+            <Layout>
+              <LoyaltySettings />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="/admin/analytics"
+        element={
+          <ProtectedRoute roles={['owner']}>
+            <Layout>
+              <AnalyticsDashboard />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="/admin/schedule"
+        element={
+          <ProtectedRoute roles={['owner']}>
+            <Layout>
+              <ScheduleCalendar />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="/admin/timeclock"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <TimeClock />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
       {/* Customer Order - Public route for QR scanning */}
       <Route path="/order" element={<CustomerOrder />} />
 
@@ -235,12 +283,20 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Start the sync manager when the app mounts
+    syncManager.start();
+    return () => syncManager.stop();
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
           <DialogProvider>
             <AppRoutes />
+            <OfflineIndicator />
+            <InstallPWA />
           </DialogProvider>
         </ToastProvider>
       </AuthProvider>

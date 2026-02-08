@@ -4,6 +4,8 @@ import type { Table, Category, Product } from '../services/api';
 import { socketService } from '../services/socket';
 import TableMap from '../components/TableMap';
 import OrderPanel from '../components/OrderPanel';
+import ConflictResolver from '../components/ConflictResolver';
+import { toast } from 'react-hot-toast';
 import OrderListPanel from '../components/OrderListPanel';
 import PosLayout from '../components/PosLayout';
 import { Loader2, UtensilsCrossed, PackageCheck, Store, ClipboardList, History, Settings, LogOut } from 'lucide-react';
@@ -29,14 +31,15 @@ export default function POS() {
     const [isLoading, setIsLoading] = useState(true);
     const [orderMode, setOrderMode] = useState<OrderMode>('dine_in');
     const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+    const [conflicts, setConflicts] = useState<any[]>([]);
 
     useEffect(() => {
         loadData();
+        checkConflicts();
         setupSocketListeners();
 
         // Auto-refresh tables every 30 seconds as fallback
         const refreshInterval = setInterval(() => {
-            console.log('[POS] Auto-refreshing tables...');
             api.getTables().then(res => {
                 if (res.data) setTables(res.data.tables);
             });
@@ -54,20 +57,31 @@ export default function POS() {
     }, []);
 
     const loadData = async () => {
-        try {
-            const [tablesRes, categoriesRes, productsRes] = await Promise.all([
-                api.getTables(),
-                api.getCategories(),
-                api.getProducts(),
-            ]);
+        // ... existing code ...
+    };
 
-            if (tablesRes.data) setTables(tablesRes.data.tables);
-            if (categoriesRes.data) setCategories(categoriesRes.data.categories);
-            if (productsRes.data) setProducts(productsRes.data.products);
+    const checkConflicts = async () => {
+        try {
+            const res = await api.request<any>('/api/sync/conflicts');
+            if (res.data?.conflicts) {
+                setConflicts(res.data.conflicts);
+            }
         } catch (error) {
-            console.error('Error loading data:', error);
-        } finally {
-            setIsLoading(false);
+            console.error('Error checking conflicts:', error);
+        }
+    };
+
+    const handleResolveConflict = async (queueId: string, decision: string) => {
+        try {
+            await api.request('/api/sync/resolve', {
+                method: 'POST',
+                body: JSON.stringify({ queue_id: queueId, decision })
+            });
+            setConflicts(prev => prev.filter(c => c.queue_id !== queueId));
+            toast.success('Đã xử lý xung đột đơn hàng');
+            loadData();
+        } catch (error) {
+            toast.error('Không thể xử lý xung đột');
         }
     };
 
@@ -90,7 +104,6 @@ export default function POS() {
 
     const handleTableUpdate = () => {
         // Reload tables when table status changes
-        console.log('[POS] Table update received, refreshing...');
         api.getTables().then(res => {
             if (res.data) setTables(res.data.tables);
         });
@@ -98,7 +111,6 @@ export default function POS() {
 
     const handleOrderItemAdded = (data: unknown) => {
         const { table_number } = data as { table_number: number; order_id: string };
-        console.log(`[POS] New item added to table ${table_number}, refreshing tables...`);
         // Refresh tables to show updated status
         api.getTables().then(res => {
             if (res.data) setTables(res.data.tables);
@@ -106,8 +118,6 @@ export default function POS() {
     };
 
     const handleKitchenNewItem = (data: unknown) => {
-        const { table_number } = data as { table_number: number };
-        console.log(`[POS] Kitchen item from table ${table_number}`);
         // Play sound for new kitchen item
         const audio = new Audio('/sounds/order.mp3');
         audio.play().catch(() => { });
@@ -190,6 +200,27 @@ export default function POS() {
 
     return (
         <PosLayout>
+            {conflicts.length > 0 && (
+                <ConflictResolver
+                    tableNumber={conflicts[0].table_number}
+                    cloudOrder={{
+                        id: conflicts[0].cloud_order?.id,
+                        items: conflicts[0].cloud_order?.items?.map((i: any) => ({
+                            product_name: i.product_name_vi || i.open_item_name,
+                            quantity: i.quantity
+                        })) || []
+                    }}
+                    localOrder={{
+                        id: conflicts[0].local_id,
+                        items: conflicts[0].local_order?.items?.map((i: any) => ({
+                            product_name: i.product_name_vi || i.name || 'Món Local',
+                            quantity: i.quantity
+                        })) || []
+                    }}
+                    onResolve={(decision) => handleResolveConflict(conflicts[0].queue_id, decision)}
+                    onClose={() => setConflicts(prev => prev.slice(1))}
+                />
+            )}
             <div className="flex flex-col flex-1 h-full w-full bg-slate-50 relative overflow-hidden">
                 {/* Order Mode Switcher Header */}
                 {!selectedTable && (

@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { Express } from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -26,20 +26,26 @@ import { exportRouter } from './routes/export.js';
 import { notificationRouter } from './routes/notification.js';
 import { stationsRouter } from './routes/stations.js';
 import { adminRouter } from './routes/admin.js';
+import { loyaltyRouter } from './routes/loyalty.js';
+import schedulingRouter from './routes/scheduling.js';
+import languageRouter from './routes/languages.js';
 import { setupSocketHandlers } from './socket/index.js';
 import { startSessionCleanupJob } from './jobs/sessionCleanup.js';
-// ... (omitting lines for brevity, wait, I should target the specific block I messed up)
+import { setupDbListener } from './services/dbListener.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authMiddleware } from './middleware/auth.js';
+import { query } from './db/pool.js';
 
-const app = express();
+const app: Express = express();
 const httpServer = createServer(app);
 
 const allowedOrigins = [
     'http://localhost:5173',
+    'http://localhost:5174', // Allow port 5174
     'http://127.0.0.1:5173',
-    /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:5173$/,
-    /^http:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:5173$/ // Allow any IP with port 5173
+    'http://127.0.0.1:5174',
+    /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:517\d$/, // Allow 517x
+    /^http:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:517\d$/ // Allow any IP with port 517x
 ];
 
 // Socket.IO setup
@@ -62,6 +68,24 @@ app.use(express.json());
 // Health check
 app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Server Info (Hybrid Deployment)
+app.get('/api/info', (_req, res) => {
+    res.json({
+        deploymentMode: process.env.DEPLOYMENT_MODE || 'vps',
+        version: '1.0.0-hybrid'
+    });
+});
+
+// Pending Sync Count
+app.get('/api/sync/pending-count', async (_req, res, next) => {
+    try {
+        const result = await query('SELECT COUNT(*) as count FROM offline_sync_queue WHERE status = \'pending\'');
+        res.json({ count: parseInt(result.rows[0].count) });
+    } catch (error) {
+        next(error);
+    }
 });
 
 // Static serve for uploads
@@ -91,6 +115,9 @@ app.use('/api/settings', authMiddleware, settingsRouter);
 app.use('/api/cash', authMiddleware, cashRouter);
 app.use('/api/stations', authMiddleware, stationsRouter);
 app.use('/api/admin', authMiddleware, adminRouter);
+app.use('/api/loyalty', authMiddleware, loyaltyRouter);
+app.use('/api/scheduling', authMiddleware, schedulingRouter);
+app.use('/api/languages', languageRouter);
 
 // Public endpoint for payment methods (needed for POS checkout without extra auth check)
 app.get('/api/public/payment-methods', async (_req, res, next) => {
@@ -120,12 +147,15 @@ app.set('io', io);
 
 const PORT = process.env.PORT || 3001;
 
-httpServer.listen(PORT, '0.0.0.0', () => {
+httpServer.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
     console.log(`📡 Socket.IO ready`);
 
     // Start scheduled jobs
     startSessionCleanupJob();
+
+    // Setup Sync Listener (Real-time sync between Cloud/Local)
+    setupDbListener(io);
 
     console.log(`\n📋 Available endpoints:`);
     console.log(`   GET  /api/health`);
