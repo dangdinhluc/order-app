@@ -1,0 +1,2 @@
+
+[15:29] RUN SUCCESS: App running at http://localhost:5174 (Backend: http://localhost:3001) using Neon DB

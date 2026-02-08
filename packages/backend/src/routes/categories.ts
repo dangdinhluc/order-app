@@ -4,7 +4,7 @@ import { query } from '../db/pool.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { AuthRequest, requireRole } from '../middleware/auth.js';
 
-const router = Router();
+const router: Router = Router();
 
 // Validation schemas
 const createCategorySchema = z.object({
@@ -12,6 +12,7 @@ const createCategorySchema = z.object({
     name_ja: z.string().max(100).optional(),
     name_en: z.string().max(100).optional(),
     sort_order: z.number().int().optional(),
+    name_translations: z.record(z.string()).optional(),
 });
 
 const updateCategorySchema = createCategorySchema.partial();
@@ -63,13 +64,15 @@ router.post(
             const data = createCategorySchema.parse(req.body);
 
             const result = await query(
-                `INSERT INTO categories (name_vi, name_ja, name_en, sort_order)
-         VALUES ($1, $2, $3, $4)
-         RETURNING *`,
-                [data.name_vi, data.name_ja || null, data.name_en || null, data.sort_order || 0]
-            );
-
-            res.status(201).json({
+                'INSERT INTO categories (name_vi, name_ja, name_en, sort_order, name_translations) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+                [
+                    data.name_vi,
+                    data.name_ja || null,
+                    data.name_en || null,
+                    data.sort_order || 0,
+                    data.name_translations || {},
+                ]
+            ); res.status(201).json({
                 success: true,
                 data: { category: result.rows[0] },
             });

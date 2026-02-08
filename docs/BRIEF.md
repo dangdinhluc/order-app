@@ -54,5 +54,59 @@
 - **Animation:** Framer Motion.
 - **Backend:** Tận dụng API `GET /api/customer/menu` hiện có (cần bổ sung field `is_best_seller`, `is_combo` vào DB).
 
-## 7. BƯỚC TIẾP THEO
--> Chạy `/plan` để thiết kế Database Schema và Task List chi tiết.
+## 7. CHIẾN LƯỢC DEPLOY: HYBRID MODEL (VPS + LOCAL)
+
+### 💡 Ý tưởng:
+Deploy app ở cả 2 nơi nhưng dùng chung 1 database (Neon DB).
+
+- **VPS (Cloud):** Dùng cho khách hàng quét QR gọi món và chủ quán xem báo cáo từ xa.
+- **Local (Máy tại quán):** Dùng cho nhân viên POS/Thu ngân/Bếp.
+- **Database:** Dùng chung Neon DB để dữ liệu luôn đồng bộ.
+
+### ✅ Ưu điểm:
+- **Tốc độ:** Nhân viên tại quán load giao diện cực nhanh vì server nằm ngay trong mạng WiFi nội bộ.
+- **Đồng bộ:** Khách đặt món trên Cloud, POS tại quán thấy ngay lập tức vì dùng chung DB.
+
+### ⚠️ Thách thức:
+- **Internet:** Nếu quán mất mạng, máy Local sẽ không gửi được dữ liệu lên Neon DB.
+- **Cấu hình:** Cần quản lý cấu hình khác nhau cho bản Cloud và bản Local.
+
+### 🖼️ Xử lý ảnh (Cloudinary)
+Hiện tại dự án đang dùng **Cloudinary** để lưu ảnh, đây là phương án tối ưu nhất cho mô hình Hybrid:
+
+- **Lưu trữ tập trung:** Ảnh không lưu ở ổ cứng máy chủ (VPS hay Local) mà lưu trên Cloud.
+- **Tốc độ:** Cloudinary là CDN chuyên nghiệp, tự động tối ưu dung lượng ảnh giúp load cực nhanh dù khách ở quán hay ở xa.
+- **Đồng bộ tự động:** Khi anh up ảnh từ máy ở quán, ảnh bay thẳng lên Cloudinary và đường dẫn (URL) được lưu vào Neon DB. Máy VPS sẽ thấy và hiển thị được ngay.
+
+### 📶 Giải pháp khi Mất Mạng (Offline Resilience)
+Đây là phần "sống còn" cho quán:
+
+- **Cơ chế Lưu Tạm (Buffer):** Khi máy tại quán không thấy Internet, nó sẽ tự động chuyển sang chế độ "Chờ đồng bộ". Mọi đơn hàng nhân viên bấm trên iPad sẽ được lưu tạm vào ổ cứng máy tính Local.
+- **In ấn nội bộ:** Vì máy in và iPad kết nối qua WiFi nội bộ, nên **mất mạng Internet anh vẫn in được hóa đơn và ticket bếp bình thường**.
+- **Tự động đồng bộ:** Ngay khi có mạng trở lại, máy chủ Local sẽ tự động "đẩy" (sync) tất cả đơn hàng đã lưu tạm lên Neon DB cho anh.
+
+### 🎯 Kết luận về mô hình Hybrid:
+Đây là sự kết hợp hoàn hảo: **Dùng sướng như App Offline nhưng quản lý xịn như App Online.**
+
+### 🔄 Đồng bộ thời gian thực (Neon Bridge)
+Đây là câu trả lời cho lo lắng về việc khách quét QR và nhân viên tại bàn bị chồng chéo:
+
+- **Dùng chung Database (Neon DB):** Mọi đơn hàng từ QR (qua VPS) và từ iPad (qua Local) đều bay về một chỗ duy nhất là Neon DB. Database sẽ là "trọng tài" duy nhất để cấp ID và quản lý trạng thái bàn.
+- **Cơ chế thông báo tự động (Listen/Notify):** Khi có khách vừa đặt từ QR, Database sẽ tự động "gọi" cho máy chủ tại quán: *"Này, có đơn mới cho bàn số 5"*. 
+- **Cập nhật tức thì (Socket.IO):** Ngay sau đó, máy chủ tại quán sẽ báo cho iPad của nhân viên rung lên và hiện món khách vừa gọi. 
+
+### 🛡️ Xử lý xung đột khi mất mạng (Outage Conflict Resolution)
+Trường hợp anh lo lắng: Quán mất mạng, khách đặt qua 4G (vào VPS) còn nhân viên đặt tại bàn (máy Local).
+
+- **Cảnh báo mất đồng bộ:** Khi máy Local mất mạng, màn hình POS của nhân viên sẽ hiện cảnh báo đỏ: *"Mất kết nối Cloud - Cẩn thận kiểm tra đơn QR"*.
+- **Cơ chế đối soát (Reconciliation):** Khi có mạng trở lại và máy Local bắt đầu đẩy đơn lên Neon DB, hệ thống sẽ tự động kiểm tra:
+    - Nếu bàn đó cũng có đơn từ QR trong lúc mất mạng, hệ thống sẽ **không tự ý gộp** mà hiện lên một bảng thông báo cho nhân viên: *"Phát hiện đơn hàng trùng lặp tại Bàn 5"*.
+    - Nhân viên chỉ cần nhấn nút **"Xác nhận gộp đơn"** hoặc **"Hủy đơn trùng"** là xong.
+
+**=> Kết quả:** Dữ liệu vẫn an toàn và mọi sự chồng chéo đều được đưa ra cho con người quyết định cuối cùng, tránh việc hệ thống tự gộp sai món.
+
+**=> Kết quả:** Nhân viên vẫn thấy khách gọi món dù khách đang kết nối với VPS ở tận Singapore, còn nhân viên đang kết nối với máy tính ở ngay tại quán.
+
+## 8. BƯỚC TIẾP THEO
+→ Thảo luận về phương án xử lý khi mất mạng (Offline support).
+→ Chạy `/plan` để thiết kế hạ tầng này.

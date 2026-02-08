@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireRole } from '../middleware/auth';
 import pool from '../db/pool';
 
-const router = Router();
+const router: Router = Router();
 
 // GET all active areas
 router.get('/', async (req, res, next) => {

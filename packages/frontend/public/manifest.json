@@ -1,0 +1,117 @@
+{
+    "name": "Hybrid POS",
+    "short_name": "HybridPOS",
+    "description": "Hệ thống POS thông minh cho nhà hàng, quán cafe",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#3B82F6",
+    "orientation": "any",
+    "icons": [
+        {
+            "src": "/icons/icon-72x72.png",
+            "sizes": "72x72",
+            "type": "image/png",
+            "purpose": "maskable any"
+        },
+        {
+            "src": "/icons/icon-96x96.png",
+            "sizes": "96x96",
+            "type": "image/png",
+            "purpose": "maskable any"
+        },
+        {
+            "src": "/icons/icon-128x128.png",
+            "sizes": "128x128",
+            "type": "image/png",
+            "purpose": "maskable any"
+        },
+        {
+            "src": "/icons/icon-144x144.png",
+            "sizes": "144x144",
+            "type": "image/png",
+            "purpose": "maskable any"
+        },
+        {
+            "src": "/icons/icon-152x152.png",
+            "sizes": "152x152",
+            "type": "image/png",
+            "purpose": "maskable any"
+        },
+        {
+            "src": "/icons/icon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable any"
+        },
+        {
+            "src": "/icons/icon-384x384.png",
+            "sizes": "384x384",
+            "type": "image/png",
+            "purpose": "maskable any"
+        },
+        {
+            "src": "/icons/icon-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable any"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "/screenshots/pos-screen.png",
+            "sizes": "1280x720",
+            "type": "image/png",
+            "form_factor": "wide",
+            "label": "Màn hình POS"
+        },
+        {
+            "src": "/screenshots/mobile-screen.png",
+            "sizes": "390x844",
+            "type": "image/png",
+            "form_factor": "narrow",
+            "label": "Giao diện Mobile"
+        }
+    ],
+    "categories": [
+        "business",
+        "productivity",
+        "food"
+    ],
+    "shortcuts": [
+        {
+            "name": "POS",
+            "short_name": "POS",
+            "description": "Mở quầy POS",
+            "url": "/pos",
+            "icons": [
+                {
+                    "src": "/icons/pos-shortcut.png",
+                    "sizes": "96x96"
+                }
+            ]
+        },
+        {
+            "name": "Bếp",
+            "short_name": "Kitchen",
+            "description": "Màn hình bếp",
+            "url": "/kitchen",
+            "icons": [
+                {
+                    "src": "/icons/kitchen-shortcut.png",
+                    "sizes": "96x96"
+                }
+            ]
+        }
+    ],
+    "share_target": {
+        "action": "/share",
+        "method": "POST",
+        "enctype": "multipart/form-data",
+        "params": {
+            "title": "name",
+            "text": "description",
+            "url": "link"
+        }
+    }
+}

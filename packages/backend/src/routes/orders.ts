@@ -7,7 +7,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { logAudit } from './audit.js';
 import { TelegramAlerts } from '../services/telegram.js';
 
-const router = Router();
+const router: Router = Router();
 
 // Validation schemas
 const createOrderSchema = z.object({

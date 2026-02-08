@@ -17,7 +17,6 @@ class SocketService {
         });
 
         this.socket.on('connect', () => {
-            console.log('🔌 Socket connected');
 
             // Re-register all listeners
             this.listeners.forEach((callbacks, event) => {
@@ -38,7 +37,6 @@ class SocketService {
         });
 
         this.socket.on('disconnect', () => {
-            console.log('🔌 Socket disconnected');
         });
     }
 

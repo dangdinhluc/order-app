@@ -83,6 +83,11 @@
             "name": "POS Cashier UX",
             "status": "in_progress",
             "desc": "Kitchen workflow, Quick search, Dynamic payment methods, Table areas"
+        },
+        {
+            "name": "Multi-language Support",
+            "status": "completed",
+            "desc": "Dynamic language system (Admin UI, Backend, and Customer View full support)"
         }
     ],
     "database_schema": {
@@ -106,16 +111,18 @@
             "service_calls",
             "bill_templates",
             "settings",
-            "payment_methods"
+            "payment_methods",
+            "languages"
         ],
-        "relationships_explained": "1 user xử lý nhiều orders, 1 order có nhiều items, orders thuộc về tables và sessions"
+        "relationships_explained": "1 user xử lý nhiều orders, 1 order có nhiều items, orders thuộc về tables và sessions, products/categories hỗ trợ đa ngôn ngữ"
     },
     "api_groups": [
         "Auth (/api/auth) - Đăng nhập, đăng ký, đổi mật khẩu",
         "Tables (/api/tables) - Quản lý bàn, mở/đóng bàn",
         "Areas (/api/areas) - Khu vực bàn",
-        "Products (/api/products) - Menu, hình ảnh, giá",
-        "Categories (/api/categories) - Danh mục sản phẩm",
+        "Products (/api/products) - Menu, hình ảnh, giá, đa ngôn ngữ",
+        "Categories (/api/categories) - Danh mục sản phẩm, đa ngôn ngữ",
+        "Languages (/api/languages) - Quản lý ngôn ngữ hệ thống",
         "Combos (/api/combos) - Combo giảm giá",
         "Orders (/api/orders) - Đơn hàng, thanh toán, giảm giá",
         "Kitchen (/api/kitchen) - KDS items, cập nhật trạng thái",

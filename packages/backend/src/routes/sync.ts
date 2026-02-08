@@ -3,7 +3,7 @@ import { query } from '../db/pool.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { Server as SocketIOServer } from 'socket.io';
 
-const router = Router();
+const router: Router = Router();
 
 // GET /api/sync/conflicts - Get all items in conflict status
 router.get('/conflicts', async (req: AuthRequest, res: Response, next: NextFunction) => {

@@ -8,6 +8,7 @@ export const useKitchenSocket = () => {
     const { user } = useAuth();
     const socketRef = useRef<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [latestEvent, setLatestEvent] = useState<{ type: string; data: any } | null>(null);
 
     useEffect(() => {
@@ -23,23 +24,19 @@ export const useKitchenSocket = () => {
         const socket = socketRef.current;
 
         socket.on('connect', () => {
-            console.log('Kitchen Socket connected');
             setIsConnected(true);
         });
 
         socket.on('disconnect', () => {
-            console.log('Kitchen Socket disconnected');
             setIsConnected(false);
         });
 
         // Kitchen events
         socket.on('kitchen:new_order', (data) => {
-            console.log('New Order:', data);
             setLatestEvent({ type: 'new_order', data });
         });
 
         socket.on('kitchen:status_changed', (data) => {
-            console.log('Status Changed:', data);
             setLatestEvent({ type: 'status_changed', data });
         });
 

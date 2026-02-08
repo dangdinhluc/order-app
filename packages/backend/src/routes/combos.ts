@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { requireRole, authMiddleware } from '../middleware/auth.js';
 
-const router = Router();
+const router: Router = Router();
 
 // Schema for updating combo items
 const updateComboItemsSchema = z.object({
@@ -60,7 +60,7 @@ router.get('/:comboId', async (req, res) => {
  * PUT /api/combos/:comboId
  * Update items in a combo (Review: requires admin/owner/kitchen)
  */
-router.put('/:comboId', authMiddleware, requireRole(['owner', 'kitchen']), async (req, res) => {
+router.put('/:comboId', authMiddleware, requireRole('owner', 'kitchen'), async (req, res) => {
     try {
         const { comboId } = req.params;
         const { items } = updateComboItemsSchema.parse(req.body);

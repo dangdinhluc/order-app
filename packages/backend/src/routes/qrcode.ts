@@ -1,7 +1,7 @@
 import express from 'express';
 import QRCode from 'qrcode';
 
-export const qrcodeRouter = express.Router();
+export const qrcodeRouter: express.Router = express.Router();
 
 /**
  * GET /api/qrcode/:tableId

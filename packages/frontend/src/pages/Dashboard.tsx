@@ -37,6 +37,7 @@ export default function Dashboard() {
             socketService.off('alert:discount', handleDiscountAlert);
             socketService.off('service:call', handleServiceCall);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadData = async () => {
@@ -49,7 +50,7 @@ export default function Dashboard() {
                 setSummary(summaryRes.data);
             }
         } catch (error) {
-            console.error('Error loading dashboard:', error);
+            console.error('Error loading dashboard');
         } finally {
             setIsLoading(false);
         }

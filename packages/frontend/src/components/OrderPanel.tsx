@@ -1,14 +1,21 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../services/api';
-import type { Table, Category, Product, Order, OrderItem, AddItemRequest } from '../services/api';
+import type { Table, Category, Product, Order, OrderItem, AddItemRequest, Customer } from '../services/api';
+import CustomerPicker from './CustomerPicker';
 import {
-    X, Trash2, Receipt, CreditCard,
-    QrCode, Users, Clock, Percent, PlusCircle, Loader2, Edit3, Plus, Minus, Scissors, Check, Search, Bell, Printer
+    X, Receipt, CreditCard,
+    Users, Clock, PlusCircle, Loader2, Edit3, Plus, Minus, Scissors, Check, Search, Bell, Printer, Keyboard
 } from 'lucide-react';
 import FullscreenCheckout from './FullscreenCheckout';
 import ProductCard from './ProductCard';
 import { printReceipt } from '../utils/printReceipt';
 import { useToast } from './Toast';
+import { useSoundFeedback } from '../hooks/useSoundFeedback';
+import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
+import { usePOSShortcuts } from '../hooks/useKeyboardShortcuts';
+import ConflictResolver from './ConflictResolver';
+import { useLanguage } from '../context/LanguageContext';
+import { getTranslatedField } from '../utils/languageUtils';
 
 
 interface OrderPanelProps {
@@ -22,6 +29,7 @@ interface OrderPanelProps {
 export default function OrderPanel({ table, categories, products, onClose, orderType = 'dine_in' }: OrderPanelProps) {
     // Helper to detect if this is a virtual table (takeaway/retail or selected from order list)
     const isVirtualTable = table.id.startsWith('takeaway-') || table.id.startsWith('retail-') || table.id.startsWith('order-');
+    const { currentLanguage } = useLanguage();
     const toast = useToast();
     const [order, setOrder] = useState<Order | null>(null);
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -38,6 +46,10 @@ export default function OrderPanel({ table, categories, products, onClose, order
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [productQuantity, setProductQuantity] = useState(1);
     const [productNote, setProductNote] = useState('');
+    // Quick notes / toppings state
+    const [productQuickNotes, setProductQuickNotes] = useState<{ id: string; label: string; price_modifier: number }[]>([]);
+    const [selectedQuickNotes, setSelectedQuickNotes] = useState<Set<string>>(new Set());
+    const [isLoadingQuickNotes, setIsLoadingQuickNotes] = useState(false);
     // Discount modal states
     const [showDiscount, setShowDiscount] = useState(false);
     const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
@@ -66,9 +78,19 @@ export default function OrderPanel({ table, categories, products, onClose, order
     const [isMarkingDebt, setIsMarkingDebt] = useState(false);
     const [showDebtModal, setShowDebtModal] = useState(false);
     const [debtNote, setDebtNote] = useState('');
+    // Customer for loyalty
+    const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     // Refs to access current state in cleanup useEffect (closures would capture stale values)
     const orderRef = useRef<Order | null>(null);
     const orderItemsRef = useRef<OrderItem[]>([]);
+    // UX: Sound feedback
+    const { playAdd, playError } = useSoundFeedback();
+    // UX: Keyboard shortcuts help modal
+    const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+    // UX: Search input ref for focus
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    // Hybrid Conflict UI
+    const [showConflict, setShowConflict] = useState(false);
 
 
     // Keep refs in sync with state
@@ -87,8 +109,7 @@ export default function OrderPanel({ table, categories, products, onClose, order
             if (isVirtualTable && orderRef.current && orderItemsRef.current.length === 0) {
                 // Fire and forget - we're unmounting so can't await
                 api.deleteEmptyOrder(orderRef.current.id)
-                    .then(() => console.log('Cleanup: auto-deleted empty order:', orderRef.current?.id))
-                    .catch((err) => console.warn('Cleanup: could not delete empty order:', err));
+                    .catch(() => { /* Silently ignore cleanup errors */ });
             }
         };
     }, [isVirtualTable]); // isVirtualTable is stable for the component lifetime
@@ -139,13 +160,11 @@ export default function OrderPanel({ table, categories, products, onClose, order
         if (isVirtualTable && order && orderItems.length === 0) {
             try {
                 await api.deleteEmptyOrder(order.id);
-                console.log('Auto-deleted empty order:', order.id);
                 // Clear refs to prevent double-delete in cleanup effect
                 orderRef.current = null;
                 orderItemsRef.current = [];
             } catch (error) {
                 // Silently ignore errors (order might have items added by another user, etc.)
-                console.warn('Could not delete empty order:', error);
             }
         }
         onClose();
@@ -215,7 +234,7 @@ export default function OrderPanel({ table, categories, products, onClose, order
             } else {
                 toast.error('PIN không đúng', 'Vui lòng nhập lại PIN chính xác');
             }
-        } catch {
+        } catch (error) {
             toast.error('PIN không đúng', 'Vui lòng nhập lại PIN chính xác');
         }
     };
@@ -233,11 +252,18 @@ export default function OrderPanel({ table, categories, products, onClose, order
             currency: 'JPY',
         };
         const receiptSettings = {
+            template: 'modern' as const,
+            languages: ['vi', 'ja'],
             logo_url: '',
-            header_text: 'Cảm ơn quý khách!',
-            footer_text: 'Hẹn gặp lại!',
+            header_text_vi: 'Cảm ơn quý khách!',
+            header_text_ja: 'ご来店ありがとうございます',
+            footer_text_vi: 'Hẹn gặp lại!',
+            footer_text_ja: 'またのお越しを！',
             show_table_time: true,
             show_order_number: true,
+            show_time_seated: false,
+            show_staff_name: true,
+            show_qr_code: false,
             font_size: 'medium' as const,
         };
         const printerSettings = {
@@ -268,25 +294,48 @@ export default function OrderPanel({ table, categories, products, onClose, order
     };
 
     // Quick add product (single click) - internal implementation
+    // Smart merge: if same product without note exists, increase quantity instead of adding duplicate
     const doQuickAddProduct = async (product: Product) => {
         if (!order) return;
 
         try {
-            const itemData: AddItemRequest = {
-                product_id: product.id,
-                quantity: 1,
-            };
+            // Check if this product already exists in order WITHOUT a note
+            const existingItem = orderItems.find(
+                item => item.product_id === product.id && !item.note
+            );
 
-            const response = await api.addOrderItem(order.id, itemData);
-            if (response.data) {
-                setOrderItems(prev => [...prev, response.data!.item]);
+            if (existingItem) {
+                // Update quantity of existing item
+                const newQuantity = existingItem.quantity + 1;
+                await api.updateOrderItem(order.id, existingItem.id, { quantity: newQuantity });
+                setOrderItems(prev => prev.map(i =>
+                    i.id === existingItem.id ? { ...i, quantity: newQuantity } : i
+                ));
                 const orderResponse = await api.getOrder(order.id);
                 if (orderResponse.data) {
                     setOrder(orderResponse.data.order);
                 }
+                playAdd(); // UX: Sound feedback
+            } else {
+                // Add as new item
+                const itemData: AddItemRequest = {
+                    product_id: product.id,
+                    quantity: 1,
+                };
+
+                const response = await api.addOrderItem(order.id, itemData);
+                if (response.data) {
+                    setOrderItems(prev => [...prev, response.data!.item]);
+                    const orderResponse = await api.getOrder(order.id);
+                    if (orderResponse.data) {
+                        setOrder(orderResponse.data.order);
+                    }
+                    playAdd(); // UX: Sound feedback
+                }
             }
         } catch (error) {
             console.error('Error adding item:', error);
+            playError(); // UX: Error sound
         }
     };
 
@@ -349,11 +398,28 @@ export default function OrderPanel({ table, categories, products, onClose, order
 
 
     // Open modal for adding with note (double click or long press)
-    const handleOpenProductModal = (product: Product) => {
+    const handleOpenProductModal = async (product: Product) => {
         setSelectedProduct(product);
         setProductQuantity(1);
         setProductNote('');
+        setSelectedQuickNotes(new Set());
         setShowProductModal(true);
+
+        // Load quick notes for this product
+        setIsLoadingQuickNotes(true);
+        try {
+            const res = await api.getQuickNotes(product.id);
+            if (res.data?.notes) {
+                setProductQuickNotes(res.data.notes);
+            } else {
+                setProductQuickNotes([]);
+            }
+        } catch (error) {
+            console.error('Error loading quick notes:', error);
+            setProductQuickNotes([]);
+        } finally {
+            setIsLoadingQuickNotes(false);
+        }
     };
 
     // Add product with quantity and note
@@ -361,10 +427,17 @@ export default function OrderPanel({ table, categories, products, onClose, order
         if (!order || !selectedProduct) return;
 
         try {
+            // Combine selected quick notes labels with manual note
+            const selectedLabels = productQuickNotes
+                .filter(n => selectedQuickNotes.has(n.id))
+                .map(n => n.label);
+
+            const combinedNote = [...selectedLabels, productNote].filter(Boolean).join(', ');
+
             const itemData: AddItemRequest = {
                 product_id: selectedProduct.id,
                 quantity: productQuantity,
-                note: productNote || undefined,
+                note: combinedNote || undefined,
             };
 
             const response = await api.addOrderItem(order.id, itemData);
@@ -375,11 +448,13 @@ export default function OrderPanel({ table, categories, products, onClose, order
                     setOrder(orderResponse.data.order);
                 }
             }
-            // Close modal
+            // Close modal and reset all states
             setShowProductModal(false);
             setSelectedProduct(null);
             setProductNote('');
             setProductQuantity(1);
+            setSelectedQuickNotes(new Set());
+            setProductQuickNotes([]);
         } catch (error) {
             console.error('Error adding item:', error);
         }
@@ -591,6 +666,33 @@ export default function OrderPanel({ table, categories, products, onClose, order
         }
     };
 
+    // UX: Keyboard shortcuts
+    usePOSShortcuts({
+        onCategoryChange: (index) => {
+            if (categories[index]) {
+                setSelectedCategory(categories[index].id);
+            }
+        },
+        onProductSelect: (index) => {
+            if (filteredProducts[index]) {
+                handleQuickAddProduct(filteredProducts[index]);
+            }
+        },
+        onSearch: () => searchInputRef.current?.focus(),
+        onCheckout: () => {
+            if (order && orderItems.length > 0) {
+                setShowCheckout(true);
+            }
+        },
+        onEscape: () => {
+            if (showShortcutsHelp) setShowShortcutsHelp(false);
+            else if (showProductModal) setShowProductModal(false);
+            else if (showDiscount) setShowDiscount(false);
+            else if (showCheckout) setShowCheckout(false);
+            else onClose();
+        },
+    });
+
     // If table is available, show open button
     if (table.status === 'available' && !order) {
         return (
@@ -623,6 +725,17 @@ export default function OrderPanel({ table, categories, products, onClose, order
 
     return (
         <div className="flex h-full bg-slate-100 overflow-hidden relative">
+            {/* Conflict Resolver Mock (Demo) */}
+            {showConflict && (
+                <ConflictResolver
+                    tableNumber={table.name}
+                    cloudOrder={{ id: 'cloud-1', items: [{ id: '1', product_name: 'Phở Bò', quantity: 2, source: 'cloud' }] }}
+                    localOrder={{ id: 'local-1', items: [{ id: '2', product_name: 'Phở Bò', quantity: 2, source: 'local' }] }}
+                    onResolve={() => setShowConflict(false)}
+                    onClose={() => setShowConflict(false)}
+                />
+            )}
+
             {/* LEFT COLUMN: Product List */}
             <div className="flex-1 flex flex-col min-w-0 border-r border-slate-200">
                 {/* Header: Categories & Search */}
@@ -632,15 +745,18 @@ export default function OrderPanel({ table, categories, products, onClose, order
                         <h2 className="font-bold text-lg text-slate-800 flex-shrink-0">
                             {table.name}
                             <span className="ml-2 text-sm font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                                {categories.find(c => c.id === selectedCategory)?.name_vi || 'Tất cả'}
+                                {categories.find(c => c.id === selectedCategory)
+                                    ? getTranslatedField(categories.find(c => c.id === selectedCategory), 'name', currentLanguage)
+                                    : (currentLanguage === 'vi' ? 'Tất cả' : 'All')}
                             </span>
                         </h2>
+
                         {/* Search Input */}
                         <div className="relative flex-1 max-w-xs">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                             <input
                                 type="text"
-                                placeholder="Tìm món (Tên/SKU)..."
+                                placeholder={currentLanguage === 'vi' ? "Tìm món (Tên/SKU)..." : "Search (Name/SKU)..."}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 onKeyDown={handleSearchKeyDown}
@@ -658,7 +774,7 @@ export default function OrderPanel({ table, categories, products, onClose, order
                                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                 }`}
                         >
-                            Tất cả
+                            {currentLanguage === 'vi' ? 'Tất cả' : 'All'}
                         </button>
                         {categories.map(cat => (
                             <button
@@ -669,7 +785,7 @@ export default function OrderPanel({ table, categories, products, onClose, order
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                     }`}
                             >
-                                {cat.name_vi}
+                                {getTranslatedField(cat, 'name', currentLanguage)}
                             </button>
                         ))}
                     </div>
@@ -682,6 +798,7 @@ export default function OrderPanel({ table, categories, products, onClose, order
                             <ProductCard
                                 key={product.id}
                                 product={product}
+                                language={currentLanguage}
                                 onQuickAdd={handleQuickAddProduct}
                                 onEdit={handleOpenProductModal}
                             />
@@ -794,7 +911,11 @@ export default function OrderPanel({ table, categories, products, onClose, order
                                     )}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-0.5">
-                                            <p className="font-semibold text-slate-800 text-sm truncate">{item.product_name_vi || item.open_item_name}</p>
+                                            <p className="font-semibold text-slate-800 text-sm truncate">
+                                                {item.product_id
+                                                    ? getTranslatedField(item, 'product_name', currentLanguage)
+                                                    : item.open_item_name}
+                                            </p>
                                             {/* Kitchen Status Badge */}
                                             {item.display_in_kitchen ? (
                                                 item.kitchen_status === 'pending' ? (
@@ -806,23 +927,29 @@ export default function OrderPanel({ table, categories, products, onClose, order
                                                 ) : null
                                             ) : null}
                                         </div>
-                                        <div className="flex items-center gap-2 text-xs">
-                                            <p className="text-slate-500">¥{item.unit_price?.toLocaleString()}</p>
-
-                                            {item.note && (
-                                                <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-1 max-w-[120px] truncate">
+                                        {item.note && (
+                                            <div className="flex items-center gap-1 text-xs">
+                                                <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-1 max-w-[150px] truncate">
                                                     <Edit3 size={10} /> {item.note}
                                                 </span>
-                                            )}
-
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleEditNote(item); }}
+                                                    className="text-slate-400 hover:text-blue-500 p-0.5 rounded transition-colors"
+                                                    title="Sửa ghi chú"
+                                                >
+                                                    <Edit3 size={12} />
+                                                </button>
+                                            </div>
+                                        )}
+                                        {!item.note && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleEditNote(item); }}
-                                                className="text-slate-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                title="Sửa ghi chú"
+                                                className="text-xs text-slate-400 hover:text-blue-500 flex items-center gap-1 transition-colors"
+                                                title="Thêm ghi chú"
                                             >
-                                                <Edit3 size={12} />
+                                                <Edit3 size={10} /> Ghi chú
                                             </button>
-                                        </div>
+                                        )}
                                     </div>
 
                                     {!splitMode && (
@@ -889,6 +1016,26 @@ export default function OrderPanel({ table, categories, products, onClose, order
 
                 {/* Footer: Totals & Actions */}
                 <div className="p-4 bg-slate-50 border-t border-slate-200 mt-auto">
+                    {/* Customer Picker for Loyalty - only show for open orders */}
+                    {order?.status === 'open' && (
+                        <div className="mb-3">
+                            <CustomerPicker
+                                selectedCustomer={selectedCustomer}
+                                onSelect={async (customer) => {
+                                    setSelectedCustomer(customer);
+                                    if (order?.id) {
+                                        try {
+                                            await api.linkOrderCustomer(order.id, customer?.id || null);
+                                        } catch (error) {
+                                            console.error('Failed to link customer:', error);
+                                        }
+                                    }
+                                }}
+                                disabled={!order}
+                            />
+                        </div>
+                    )}
+
                     <div className="flex justify-between items-end mb-4">
                         <span className="text-slate-500 text-sm">Tổng cộng</span>
                         <div className="text-right">
@@ -1090,9 +1237,52 @@ export default function OrderPanel({ table, categories, products, onClose, order
                             </div>
                         </div>
 
+                        {/* Quick Notes / Toppings from database */}
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                Tùy chọn {isLoadingQuickNotes && <span className="text-slate-400">(đang tải...)</span>}
+                            </label>
+                            {productQuickNotes.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {productQuickNotes.map(note => {
+                                        const isSelected = selectedQuickNotes.has(note.id);
+                                        return (
+                                            <button
+                                                key={note.id}
+                                                onClick={() => {
+                                                    setSelectedQuickNotes(prev => {
+                                                        const newSet = new Set(prev);
+                                                        if (newSet.has(note.id)) {
+                                                            newSet.delete(note.id);
+                                                        } else {
+                                                            newSet.add(note.id);
+                                                        }
+                                                        return newSet;
+                                                    });
+                                                }}
+                                                className={`px-3 py-2 text-sm rounded-xl border-2 transition-all ${isSelected
+                                                    ? 'bg-blue-50 border-blue-500 text-blue-700 font-medium'
+                                                    : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                                                    }`}
+                                            >
+                                                {note.label}
+                                                {note.price_modifier !== 0 && (
+                                                    <span className={`ml-1 ${note.price_modifier > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                                                        {note.price_modifier > 0 ? '+' : ''}¥{note.price_modifier}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : !isLoadingQuickNotes ? (
+                                <p className="text-sm text-slate-400 italic">Không có tùy chọn cho món này</p>
+                            ) : null}
+                        </div>
+
                         {/* Note input */}
                         <div className="mb-4">
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Ghi chú</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Ghi chú thêm</label>
                             <input
                                 type="text"
                                 value={productNote}
@@ -1100,26 +1290,27 @@ export default function OrderPanel({ table, categories, products, onClose, order
                                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                                 placeholder="VD: Ít cay, không hành..."
                             />
-                            {/* Quick note buttons */}
-                            <div className="flex flex-wrap gap-2 mt-2">
-                                {['Ít cay', 'Không hành', 'Thêm rau', 'Nước riêng', 'Ít đường'].map(note => (
-                                    <button
-                                        key={note}
-                                        onClick={() => setProductNote(prev => prev ? `${prev}, ${note}` : note)}
-                                        className="px-3 py-1 text-xs bg-slate-100 hover:bg-blue-50 rounded-full text-slate-600 transition"
-                                    >
-                                        + {note}
-                                    </button>
-                                ))}
-                            </div>
                         </div>
 
-                        {/* Total */}
-                        <div className="bg-slate-50 rounded-xl p-3 mb-4 flex justify-between items-center">
-                            <span className="text-slate-600">Thành tiền</span>
-                            <span className="text-xl font-bold text-blue-700">
-                                ¥{(selectedProduct.price * productQuantity).toLocaleString()}
-                            </span>
+                        {/* Total with topping prices */}
+                        <div className="bg-slate-50 rounded-xl p-3 mb-4">
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-600">Thành tiền</span>
+                                <span className="text-xl font-bold text-blue-700">
+                                    ¥{(() => {
+                                        const basePrice = selectedProduct.price * productQuantity;
+                                        const toppingPrice = productQuickNotes
+                                            .filter(n => selectedQuickNotes.has(n.id))
+                                            .reduce((sum, n) => sum + n.price_modifier, 0) * productQuantity;
+                                        return (basePrice + toppingPrice).toLocaleString();
+                                    })()}
+                                </span>
+                            </div>
+                            {selectedQuickNotes.size > 0 && (
+                                <div className="text-xs text-slate-500 mt-1">
+                                    Gồm: {productQuickNotes.filter(n => selectedQuickNotes.has(n.id)).map(n => n.label).join(', ')}
+                                </div>
+                            )}
                         </div>
 
                         {/* Actions */}
@@ -1130,6 +1321,8 @@ export default function OrderPanel({ table, categories, products, onClose, order
                                     setSelectedProduct(null);
                                     setProductNote('');
                                     setProductQuantity(1);
+                                    setSelectedQuickNotes(new Set());
+                                    setProductQuickNotes([]);
                                 }}
                                 className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium"
                             >
@@ -1512,6 +1705,22 @@ export default function OrderPanel({ table, categories, products, onClose, order
                     </div>
                 </div>
             )}
+
+            {/* Keyboard Shortcuts Help Modal */}
+            <KeyboardShortcutsHelp
+                isOpen={showShortcutsHelp}
+                onClose={() => setShowShortcutsHelp(false)}
+            />
+
+            {/* Keyboard Shortcuts Help Button */}
+            <button
+                onClick={() => setShowShortcutsHelp(true)}
+                className="fixed bottom-4 right-4 z-30 p-3 bg-slate-800 text-white rounded-full 
+                           shadow-lg hover:bg-slate-700 transition hidden md:flex items-center justify-center"
+                title="Phím tắt (?)"
+            >
+                <Keyboard size={20} />
+            </button>
         </div >
     );
 }

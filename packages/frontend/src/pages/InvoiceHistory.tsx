@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import type { Order } from '../services/api';
-import { printReceipt } from '../utils/printReceipt';
+import { printReceipt, type ReceiptSettings } from '../utils/printReceipt';
 import {
     Search,
     Calendar,
@@ -112,12 +112,19 @@ export default function InvoiceHistory() {
                 currency: settings.currency || 'JPY'
             };
 
-            const receiptSettings = {
+            const receiptSettings: ReceiptSettings = {
+                template: 'modern',
+                languages: ['vi', 'ja'],
                 logo_url: settings.logo_url || '',
-                header_text: settings.header_text || '',
-                footer_text: settings.footer_text || 'Cảm ơn quý khách!',
+                header_text_vi: settings.header_text_vi || settings.header_text || '',
+                header_text_ja: settings.header_text_ja || '',
+                footer_text_vi: settings.footer_text_vi || settings.footer_text || 'Cảm ơn quý khách!',
+                footer_text_ja: settings.footer_text_ja || 'ありがとうございます!',
                 show_table_time: settings.show_table_time ?? true,
                 show_order_number: settings.show_order_number ?? true,
+                show_time_seated: true,
+                show_staff_name: true,
+                show_qr_code: true,
                 font_size: (settings.font_size || 'medium') as 'small' | 'medium' | 'large'
             };
 
@@ -141,6 +148,7 @@ export default function InvoiceHistory() {
                     paid_at: orderData.paid_at,
                     cashier_name: orderData.cashier_name
                 },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 items: orderData.items.map((item: any) => ({
                     id: item.id,
                     product_id: item.product_id,
@@ -357,6 +365,7 @@ export default function InvoiceHistory() {
                                                                         </td>
                                                                     </tr>
                                                                 ) : (
+                                                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                                                     orderDetails[order.id]?.items?.map((item: any, itemIdx: number) => (
                                                                         <tr key={itemIdx} className="hover:bg-slate-50">
                                                                             <td className="px-4 py-2">

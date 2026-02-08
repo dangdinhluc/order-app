@@ -142,7 +142,7 @@ const CustomerSettings: React.FC = () => {
                 setSettings(prev => ({
                     ...prev,
                     ...res.data,
-                    customer_service_buttons: res.data.customer_service_buttons || DEFAULT_SERVICE_BUTTONS
+                    customer_service_buttons: res.data?.customer_service_buttons || DEFAULT_SERVICE_BUTTONS
                 }));
             }
         } catch (error) {

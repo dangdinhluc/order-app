@@ -195,7 +195,7 @@ export default function CustomerMenuV2() {
                 setIsCartOpen(false);
                 alert('Đã gửi đơn hàng!');
             }
-        } catch (err) {
+        } catch (error) {
             alert('Lỗi gửi đơn hàng');
         }
     };
@@ -210,7 +210,7 @@ export default function CustomerMenuV2() {
             });
             setIsServiceModalOpen(false);
             alert('Đã gọi nhân viên!');
-        } catch (err) {
+        } catch (error) {
             alert('Lỗi gọi nhân viên');
         }
     };

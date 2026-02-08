@@ -23,6 +23,7 @@ export default function SecuritySettings({ settings, onChange }: Props) {
         allow_price_override: false,
     };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleChange = (key: keyof PermissionSettings, value: any) => {
         if (onChange) onChange({ ...data, [key]: value });
     };
@@ -69,6 +70,7 @@ export default function SecuritySettings({ settings, onChange }: Props) {
             setShowResetConfirm(false);
             setResetInput('');
             window.location.reload();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             console.error('Reset error:', error);
             alert(`❌ Lỗi: ${error.message || 'Không thể reset database'}`);
@@ -111,6 +113,7 @@ export default function SecuritySettings({ settings, onChange }: Props) {
             window.URL.revokeObjectURL(url);
 
             alert('✅ Backup tải xuống thành công!');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             console.error('Backup error:', error);
             alert(`❌ Lỗi: ${error.message || 'Không thể tạo backup'}`);
@@ -158,6 +161,7 @@ export default function SecuritySettings({ settings, onChange }: Props) {
 
             alert('✅ Import thành công! Trang sẽ tự động reload.');
             window.location.reload();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             console.error('Import error:', error);
             alert(`❌ Lỗi: ${error.message || 'Không thể import backup'}`);

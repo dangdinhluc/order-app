@@ -4,7 +4,7 @@ import { AuthRequest, requireRole } from '../middleware/auth';
 import { ApiError } from '../middleware/errorHandler';
 import { logAudit } from './audit';
 
-const router = Router();
+const router: Router = Router();
 
 // GET /api/cash/current - Get current shift status
 router.get('/current', async (req: AuthRequest, res: Response, next: NextFunction) => {

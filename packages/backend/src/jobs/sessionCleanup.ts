@@ -53,11 +53,11 @@ export async function cleanupStaleSessions(): Promise<{ closed: number; cancelle
 
             cancelledCount += cancelResult.rowCount || 0;
 
-            // 3. Close the session
+            // 3. Close the session - use 'completed' to match DB check constraint
             await client.query(`
                 UPDATE table_sessions 
                 SET ended_at = NOW(), 
-                    status = 'auto_closed'
+                    status = 'completed'
                 WHERE id = $1
             `, [session.session_id]);
 

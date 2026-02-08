@@ -3,7 +3,7 @@ import { api } from '../services/api';
 import type { Order, OrderItem, PaymentMethod } from '../services/api';
 import type { LucideIcon } from 'lucide-react';
 import { X, CreditCard, Banknote, Smartphone, Receipt, Tag, CheckCircle2, Printer, Wallet } from 'lucide-react';
-import { printReceipt } from '../utils/printReceipt';
+import { printReceipt, type ReceiptSettings } from '../utils/printReceipt';
 import { useToast } from './Toast';
 
 interface CheckoutModalProps {
@@ -79,6 +79,7 @@ export default function CheckoutModal({ order, items = [], tableName, onClose, o
             if (res.data?.valid) {
                 setVoucherDiscount(res.data.discount);
             }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             setVoucherError(error.message || 'Voucher không hợp lệ');
             setVoucherDiscount(0);
@@ -112,6 +113,7 @@ export default function CheckoutModal({ order, items = [], tableName, onClose, o
             setTimeout(() => {
                 onSuccess();
             }, 3000); // Extended to allow printing
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             toast.error('Thanh toán thất bại', error.message || 'Vui lòng thử lại');
         } finally {
@@ -129,13 +131,25 @@ export default function CheckoutModal({ order, items = [], tableName, onClose, o
             tax_rate: 10,
             currency: 'JPY',
         };
-        const receiptSettings = {
-            logo_url: '',
-            header_text: 'Cảm ơn quý khách!',
-            footer_text: 'Hẹn gặp lại!',
-            show_table_time: true,
+        const receiptSettings: ReceiptSettings = {
+            header_text: "NHÀ HÀNG IZAKAYA",
+            footer_text: "Cảm ơn quý khách!",
+            logo_url: "",
+            show_date: true,
+            show_time: true,
             show_order_number: true,
-            font_size: 'medium' as const,
+            show_table: true,
+            show_cashier: true,
+            font_size: "medium",
+            template: "modern",
+            languages: ["vi"],
+            header_text_vi: "NHÀ HÀNG IZAKAYA",
+            header_text_ja: "IZAKAYA RESTAURANT",
+            footer_text_vi: "Cảm ơn quý khách!",
+            footer_text_ja: "Thank you!",
+            show_wifi: false,
+            wifi_ssid: "",
+            wifi_password: ""
         };
         const printerSettings = {
             printer_type: 'browser' as const,

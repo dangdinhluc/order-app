@@ -1,5 +1,5 @@
 // Quick script to fix UTF-8 encoding for user names
-import { query } from './db';
+import { query } from './db/pool.js';
 
 async function fixEncoding() {
     try {

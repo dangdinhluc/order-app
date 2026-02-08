@@ -96,6 +96,7 @@ export default function AreaManager() {
             if (editingId) {
                 await api.updateArea(editingId, dataToSave);
             } else {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await api.createArea(dataToSave as any);
             }
             setIsEditing(false);

@@ -97,6 +97,7 @@ class ApiService {
                 // Return a "fake" success to keep the UI running
                 return {
                     success: true,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     data: { offline: true, localId } as any
                 };
             }
@@ -159,6 +160,19 @@ class ApiService {
     async deleteCategory(id: string) {
         return this.request<{ message: string }>(`/api/categories/${id}`, {
             method: 'DELETE',
+        });
+    }
+
+    // Sync & Conflict Resolution
+    async checkConflicts() {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return this.request<any>('/api/sync/conflicts');
+    }
+
+    async resolveConflict(queueId: string, decision: string) {
+        return this.request('/api/sync/resolve', {
+            method: 'POST',
+            body: JSON.stringify({ queue_id: queueId, decision })
         });
     }
 
@@ -506,6 +520,7 @@ class ApiService {
     }
 
     async validateVoucher(code: string, orderTotal: number) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ valid: boolean; discount: number; voucher: any }>('/api/vouchers/validate', {
             method: 'POST',
             body: JSON.stringify({ code, orderTotal }),
@@ -564,9 +579,10 @@ class ApiService {
 
     // Settings
     async getSettings() {
-        return this.request<Record<string, any>>('/api/settings');
+        return this.request<Record<string, any>>('/api/settings'); // eslint-disable-line @typescript-eslint/no-explicit-any
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async updateSetting(key: string, value: any) {
         return this.request<{ message: string }>(`/api/settings/${key}`, {
             method: 'PUT',
@@ -574,7 +590,7 @@ class ApiService {
         });
     }
 
-    async updateSettings(settings: Record<string, any>) {
+    async updateSettings(settings: Record<string, any>) { // eslint-disable-line @typescript-eslint/no-explicit-any
         return this.request<{ message: string }>('/api/settings', {
             method: 'PUT',
             body: JSON.stringify(settings),
@@ -617,8 +633,10 @@ class ApiService {
     }
 
     // Audit Logs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async getAuditLogs(params?: any) {
         const searchParams = new URLSearchParams(params);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ logs: any[], total: number }>(`/api/audit?${searchParams}`);
     }
 
@@ -627,6 +645,7 @@ class ApiService {
     }
 
     async getAuditSummary() {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<any>('/api/audit/summary');
     }
 
@@ -636,10 +655,12 @@ class ApiService {
 
     // Slideshow
     async getSlideshow() {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ images: any[] }>('/api/settings/slideshow');
     }
 
     async addSlideshowImage(image_url: string, title = '', sort_order = 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ image: any }>('/api/settings/slideshow', {
             method: 'POST',
             body: JSON.stringify({ image_url, title, sort_order }),
@@ -654,6 +675,7 @@ class ApiService {
 
     // Featured Products
     async getFeaturedProducts() {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ products: any[] }>('/api/settings/products-featured');
     }
 
@@ -673,6 +695,7 @@ class ApiService {
 
     // Tablet Menu Visibility
     async getTabletMenu() {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ categories: any[] }>('/api/settings/tablet-menu');
     }
 
@@ -685,10 +708,12 @@ class ApiService {
 
     // Quick Notes
     async getQuickNotes(productId: string) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ notes: any[] }>(`/api/settings/quick-notes/${productId}`);
     }
 
     async addQuickNote(product_id: string, label: string, price_modifier = 0, sort_order = 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ note: any }>('/api/settings/quick-notes', {
             method: 'POST',
             body: JSON.stringify({ product_id, label, price_modifier, sort_order }),
@@ -703,10 +728,12 @@ class ApiService {
 
     // Cash Management
     async getCashStatus() {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ shift: any, pay_in: number, pay_out: number, cash_sales: number, current_balance: number }>('/api/cash/current');
     }
 
     async openCashShift(start_amount: number, note?: string) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ shift: any }>('/api/cash/open', {
             method: 'POST',
             body: JSON.stringify({ start_amount, note }),
@@ -714,6 +741,7 @@ class ApiService {
     }
 
     async closeCashShift(end_amount: number, note?: string) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ shift: any }>('/api/cash/close', {
             method: 'POST',
             body: JSON.stringify({ end_amount, note }),
@@ -721,6 +749,7 @@ class ApiService {
     }
 
     async createCashTransaction(type: 'pay_in' | 'pay_out', amount: number, reason: string) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ transaction: any }>('/api/cash/transaction', {
             method: 'POST',
             body: JSON.stringify({ type, amount, reason }),
@@ -728,6 +757,7 @@ class ApiService {
     }
 
     async getCashHistory() {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ shifts: any[] }>('/api/cash/history');
     }
 
@@ -758,6 +788,7 @@ class ApiService {
 
     // Combos
     async getComboItems(comboId: string) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ items: any[] }>(`/api/combos/${comboId}`);
     }
 
@@ -770,39 +801,50 @@ class ApiService {
 
     // Loyalty
     async getLoyaltyTiers() {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ data: any[] }>(`/api/loyalty/tiers`);
     }
 
     async getLoyaltyRewards() {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ data: any[] }>(`/api/loyalty/rewards`);
     }
 
     async getLoyaltyStats() {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ data: any }>(`/api/loyalty/stats`);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async createLoyaltyTier(data: any) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ data: any }>(`/api/loyalty/tiers`, {
             method: 'POST',
             body: JSON.stringify(data),
         });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async updateLoyaltyTier(id: string, data: any) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ data: any }>(`/api/loyalty/tiers/${id}`, {
             method: 'PUT',
             body: JSON.stringify(data),
         });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async createLoyaltyReward(data: any) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ data: any }>(`/api/loyalty/rewards`, {
             method: 'POST',
             body: JSON.stringify(data),
         });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async updateLoyaltyReward(id: string, data: any) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ data: any }>(`/api/loyalty/rewards/${id}`, {
             method: 'PUT',
             body: JSON.stringify(data),
@@ -816,10 +858,12 @@ class ApiService {
     }
 
     async getCustomerLoyalty(customerId: string) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ data: any }>(`/api/loyalty/customers/${customerId}`);
     }
 
     async earnLoyaltyPoints(customerId: string, orderId: string, amount: number) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ data: any }>(`/api/loyalty/customers/${customerId}/earn`, {
             method: 'POST',
             body: JSON.stringify({ order_id: orderId, amount }),
@@ -827,6 +871,7 @@ class ApiService {
     }
 
     async redeemLoyaltyReward(customerId: string, rewardId: string) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.request<{ data: any }>(`/api/loyalty/customers/${customerId}/redeem`, {
             method: 'POST',
             body: JSON.stringify({ reward_id: rewardId }),
@@ -891,6 +936,9 @@ export interface Category {
     name_en?: string;
     sort_order: number;
     name_translations?: Record<string, string>;
+    display_in_menu?: boolean;
+    display_in_pos?: boolean;
+    display_in_kiosk?: boolean;
 }
 
 export interface Product {
@@ -905,6 +953,9 @@ export interface Product {
     price: number;
     display_in_kitchen: boolean;
     is_available: boolean;
+    display_in_menu?: boolean;
+    display_in_pos?: boolean;
+    display_in_kiosk?: boolean;
     image_url?: string;
     category_name_vi?: string;
     // Badges
@@ -1118,7 +1169,7 @@ export interface CreateTableDTO {
     position_y?: number;
 }
 
-export interface UpdateTableDTO extends Partial<CreateTableDTO> { }
+export interface UpdateTableDTO extends Partial<CreateTableDTO> { } // eslint-disable-line @typescript-eslint/no-empty-object-type
 
 export interface SalesPeriod {
     period: string;

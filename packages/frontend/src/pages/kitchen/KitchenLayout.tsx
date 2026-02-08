@@ -24,6 +24,7 @@ function NavLink({ to, label, icon, end = false }: { to: string; label: string; 
 
 export default function KitchenLayout({ children }: { children?: React.ReactNode }) {
     const [currentTime, setCurrentTime] = useState(new Date());
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [isConnected, setIsConnected] = useState(true); // Placeholder for socket status
 
     useEffect(() => {

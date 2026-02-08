@@ -5,6 +5,8 @@ import type { LucideIcon } from 'lucide-react';
 import { ArrowLeft, CreditCard, Banknote, Smartphone, Receipt, Tag, CheckCircle2, Printer, Wallet, QrCode, X, Delete, Percent } from 'lucide-react';
 import { printReceipt } from '../utils/printReceipt';
 import { useToast } from './Toast';
+import { useLanguage } from '../context/LanguageContext';
+import { getTranslatedField } from '../utils/languageUtils';
 
 interface FullscreenCheckoutProps {
     order: Order;
@@ -40,6 +42,7 @@ const MAX_DISCOUNT_PERCENT = 10; // Thu ngân chỉ được giảm tối đa 10
 
 export default function FullscreenCheckout({ order, items = [], tableName, onClose, onSuccess }: FullscreenCheckoutProps) {
     const toast = useToast();
+    const { currentLanguage } = useLanguage();
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [selectedMethod, setSelectedMethod] = useState('');
     const [receivedAmount, setReceivedAmount] = useState<number>(0);
@@ -69,6 +72,11 @@ export default function FullscreenCheckout({ order, items = [], tableName, onClo
     const changeAmount = receivedAmount > amountToPay ? receivedAmount - amountToPay : 0;
     const isShortAmount = selectedMethod === 'cash' && receivedAmount < amountToPay;
 
+    // Loyalty state
+    const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
+    const [pointsPerYen, setPointsPerYen] = useState(1);
+    const [earnedPoints, setEarnedPoints] = useState(0);
+
     // Load payment methods
     useEffect(() => {
         const loadPaymentMethods = async () => {
@@ -87,6 +95,32 @@ export default function FullscreenCheckout({ order, items = [], tableName, onClo
         loadPaymentMethods();
     }, []);
 
+    // Load loyalty settings
+    useEffect(() => {
+        const loadLoyaltySettings = async () => {
+            try {
+                const res = await api.getSettings();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const settings = (res as any).data || {};
+                setLoyaltyEnabled(settings.loyalty_enabled === 'true');
+                setPointsPerYen(parseInt(settings.loyalty_points_per_yen) || 1);
+            } catch (e) {
+                console.error('Failed to load loyalty settings:', e);
+            }
+        };
+        loadLoyaltySettings();
+    }, []);
+
+    // Calculate points to earn
+    useEffect(() => {
+        if (loyaltyEnabled && order.customer_id) {
+            const points = Math.floor((finalTotal / 100) * pointsPerYen);
+            setEarnedPoints(points);
+        } else {
+            setEarnedPoints(0);
+        }
+    }, [finalTotal, loyaltyEnabled, pointsPerYen, order.customer_id]);
+
     useEffect(() => {
         setReceivedAmount(Math.ceil(finalTotal / 1000) * 1000);
     }, [finalTotal]);
@@ -102,6 +136,7 @@ export default function FullscreenCheckout({ order, items = [], tableName, onClo
                 setVoucherDiscount(res.data.discount);
                 setShowVoucher(false);
             }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             setVoucherError(error.message || 'Voucher không hợp lệ');
             setVoucherDiscount(0);
@@ -138,6 +173,17 @@ export default function FullscreenCheckout({ order, items = [], tableName, onClo
                 received: selectedMethod === 'cash' ? receivedAmount : undefined,
                 change: selectedMethod === 'cash' ? changeAmount : undefined,
             });
+
+            // Award loyalty points if customer is linked
+            if (loyaltyEnabled && order.customer_id && earnedPoints > 0) {
+                try {
+                    await api.earnLoyaltyPoints(order.customer_id, order.id, amountToPay);
+                    toast.success(`+${earnedPoints} điểm`, 'Đã tích điểm cho khách hàng');
+                } catch (e) {
+                    console.error('Failed to award loyalty points:', e);
+                }
+            }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             toast.error('Thanh toán thất bại', error.message || 'Vui lòng thử lại');
         } finally {
@@ -155,11 +201,18 @@ export default function FullscreenCheckout({ order, items = [], tableName, onClo
             currency: 'JPY',
         };
         const receiptSettings = {
+            template: 'modern' as const,
+            languages: ['vi', 'ja'],
             logo_url: '',
-            header_text: 'Cảm ơn quý khách!',
-            footer_text: 'Hẹn gặp lại!',
+            header_text_vi: 'Cảm ơn quý khách!',
+            header_text_ja: 'ご来店ありがとうございます',
+            footer_text_vi: 'Hẹn gặp lại!',
+            footer_text_ja: 'またのお越しを！',
             show_table_time: true,
             show_order_number: true,
+            show_time_seated: false,
+            show_staff_name: true,
+            show_qr_code: false,
             font_size: 'medium' as const,
         };
         const printerSettings = {
@@ -236,10 +289,10 @@ export default function FullscreenCheckout({ order, items = [], tableName, onClo
                     <h1 className="text-3xl font-bold mb-2">Thanh toán thành công!</h1>
                     <p className="text-xl opacity-80 mb-4">¥{Math.round(finalTotal).toLocaleString()}</p>
 
-                    {paymentInfo?.change && paymentInfo.change > 0 && (
+                    {(paymentInfo?.change ?? 0) > 0 && (
                         <div className="bg-white/20 rounded-2xl px-6 py-3 mb-4 inline-block">
                             <p className="text-base">Tiền thừa trả khách</p>
-                            <p className="text-3xl font-bold">¥{Math.round(paymentInfo.change).toLocaleString()}</p>
+                            <p className="text-3xl font-bold">¥{Math.round(paymentInfo!.change!).toLocaleString()}</p>
                         </div>
                     )}
 
@@ -329,7 +382,7 @@ export default function FullscreenCheckout({ order, items = [], tableName, onClo
                                     {/* Item Info */}
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm truncate text-slate-900">
-                                            <span className="text-blue-600 font-semibold">{item.quantity}x</span> {item.product_name_vi || item.open_item_name}
+                                            <span className="text-blue-600 font-semibold">{item.quantity}x</span> {item.product_id ? getTranslatedField(item, 'product_name', currentLanguage) : item.open_item_name}
                                         </p>
                                         {item.note && <p className="text-xs text-orange-500 truncate">📝 {item.note}</p>}
                                     </div>
@@ -413,6 +466,18 @@ export default function FullscreenCheckout({ order, items = [], tableName, onClo
                                     </button>
                                 </div>
                                 {voucherError && <p className="text-red-500 text-xs">{voucherError}</p>}
+                            </div>
+                        )}
+
+                        {/* Loyalty Points Preview */}
+                        {loyaltyEnabled && earnedPoints > 0 && (
+                            <div className="mb-3 p-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">
+                                <div className="flex items-center gap-2 text-amber-700">
+                                    <span className="text-lg">⭐</span>
+                                    <span className="text-sm font-medium">
+                                        Khách sẽ nhận <span className="font-bold text-amber-800">+{earnedPoints} điểm</span>
+                                    </span>
+                                </div>
                             </div>
                         )}
 

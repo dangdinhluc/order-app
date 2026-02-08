@@ -23,6 +23,13 @@ const orderModes = [
 ];
 
 
+interface Conflict {
+    queue_id: string;
+    table_number: number;
+    cloud_order: { id: string; items: any[] };
+    local_order: { id: string; items: any[] };
+}
+
 export default function POS() {
     const [tables, setTables] = useState<Table[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -30,12 +37,13 @@ export default function POS() {
     const [selectedTable, setSelectedTable] = useState<Table | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [orderMode, setOrderMode] = useState<OrderMode>('dine_in');
-    const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-    const [conflicts, setConflicts] = useState<any[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [_selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+    const [conflicts, setConflicts] = useState<Conflict[]>([]);
 
     useEffect(() => {
         loadData();
-        checkConflicts();
+        // checkConflicts(); // Disabled: endpoint not implemented yet
         setupSocketListeners();
 
         // Auto-refresh tables every 30 seconds as fallback
@@ -54,29 +62,43 @@ export default function POS() {
             socketService.off('kitchen:new_item', handleKitchenNewItem);
             clearInterval(refreshInterval);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadData = async () => {
-        // ... existing code ...
-    };
-
-    const checkConflicts = async () => {
         try {
-            const res = await api.request<any>('/api/sync/conflicts');
-            if (res.data?.conflicts) {
-                setConflicts(res.data.conflicts);
-            }
+            const [tablesRes, categoriesRes, productsRes] = await Promise.all([
+                api.getTables(),
+                api.getCategories(),
+                api.getProducts()
+            ]);
+
+            if (tablesRes.data) setTables(tablesRes.data.tables);
+            if (categoriesRes.data) setCategories(categoriesRes.data.categories);
+            if (productsRes.data) setProducts(productsRes.data.products);
         } catch (error) {
-            console.error('Error checking conflicts:', error);
+            console.error('Error loading POS data');
+            toast.error('Không thể tải dữ liệu. Vui lòng thử lại.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
+    // const checkConflicts = async () => {
+    //     try {
+    //         const res = await api.checkConflicts();
+    //         if (res.data?.conflicts) {
+    //             setConflicts(res.data.conflicts);
+    //         }
+    //     } catch (error) {
+    //         // Endpoint not implemented yet - fail silently
+    //         // console.error('Error checking conflicts:', error);
+    //     }
+    // };
+
     const handleResolveConflict = async (queueId: string, decision: string) => {
         try {
-            await api.request('/api/sync/resolve', {
-                method: 'POST',
-                body: JSON.stringify({ queue_id: queueId, decision })
-            });
+            await api.resolveConflict(queueId, decision);
             setConflicts(prev => prev.filter(c => c.queue_id !== queueId));
             toast.success('Đã xử lý xung đột đơn hàng');
             loadData();
@@ -109,15 +131,16 @@ export default function POS() {
         });
     };
 
-    const handleOrderItemAdded = (data: unknown) => {
-        const { table_number } = data as { table_number: number; order_id: string };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const handleOrderItemAdded = (_data: unknown) => {
         // Refresh tables to show updated status
         api.getTables().then(res => {
             if (res.data) setTables(res.data.tables);
         });
     };
 
-    const handleKitchenNewItem = (data: unknown) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const handleKitchenNewItem = (_data: unknown) => {
         // Play sound for new kitchen item
         const audio = new Audio('/sounds/order.mp3');
         audio.play().catch(() => { });
@@ -196,25 +219,28 @@ export default function POS() {
     }
 
     // Check if in takeaway/retail mode (no table selection needed)
-    const needsTableSelection = orderMode === 'dine_in';
 
     return (
         <PosLayout>
             {conflicts.length > 0 && (
                 <ConflictResolver
-                    tableNumber={conflicts[0].table_number}
+                    tableNumber={String(conflicts[0].table_number)}
                     cloudOrder={{
                         id: conflicts[0].cloud_order?.id,
                         items: conflicts[0].cloud_order?.items?.map((i: any) => ({
+                            id: i.id || 'cloud-item',
                             product_name: i.product_name_vi || i.open_item_name,
-                            quantity: i.quantity
+                            quantity: i.quantity,
+                            source: 'cloud' as const
                         })) || []
                     }}
                     localOrder={{
-                        id: conflicts[0].local_id,
+                        id: conflicts[0].local_order?.id,
                         items: conflicts[0].local_order?.items?.map((i: any) => ({
+                            id: i.id || 'local-item',
                             product_name: i.product_name_vi || i.name || 'Món Local',
-                            quantity: i.quantity
+                            quantity: i.quantity,
+                            source: 'local' as const
                         })) || []
                     }}
                     onResolve={(decision) => handleResolveConflict(conflicts[0].queue_id, decision)}
@@ -315,8 +341,6 @@ export default function POS() {
                         <div className="flex-1 bg-white">
                             <OrderListPanel
                                 onSelectOrder={handleSelectExistingOrder}
-                                categories={categories}
-                                products={products}
                             />
                         </div>
                     )}

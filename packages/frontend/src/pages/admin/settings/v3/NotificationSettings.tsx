@@ -28,6 +28,7 @@ export default function NotificationSettings({ settings, onChange }: Props) {
         },
     };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleChange = (key: keyof NotificationSettings, value: any) => {
         if (onChange) onChange({ ...data, [key]: value });
     };

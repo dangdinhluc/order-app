@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { AuthRequest, requireRole } from '../middleware/auth.js';
 import { query } from '../db/pool.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * POST /api/admin/reset-database
@@ -11,26 +11,37 @@ const router = Router();
  */
 router.post('/reset-database', requireRole('owner'), async (req: AuthRequest, res) => {
     try {
-        console.log('⚠️  DATABASE RESET REQUESTED by user:', req.user?.username);
+        console.log('⚠️  DATABASE RESET REQUESTED by user:', req.user?.name);
 
-        // Delete all data in reverse dependency order
-        await query('DELETE FROM kitchen_ticket_items');
-        await query('DELETE FROM kitchen_tickets');
-        await query('DELETE FROM order_items');
-        await query('DELETE FROM orders');
-        await query('DELETE FROM table_sessions');
-        await query("UPDATE tables SET status = 'available' WHERE status = 'occupied'");
+        // 1. Get all table names
+        const { rows } = await query(`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_type = 'BASE TABLE'
+        `);
 
-        // Optionally delete products, categories, etc. (keep structure, delete data)
-        // await query('DELETE FROM product_options');
-        // await query('DELETE FROM products');
-        // await query('DELETE FROM categories');
+        // 2. Filter out tables to keep
+        const keepTables = ['users', 'migrations', 'schema_migrations'];
+        const tablesToTruncate = rows
+            .map((r: any) => r.table_name)
+            .filter((t: string) => !keepTables.includes(t));
+
+        if (tablesToTruncate.length === 0) {
+            return res.json({ success: true, message: 'Database already empty.' });
+        }
+
+        console.log(`Truncating ${tablesToTruncate.length} tables:`, tablesToTruncate.join(', '));
+
+        // 3. Truncate tables with CASCADE
+        const truncateQuery = `TRUNCATE TABLE ${tablesToTruncate.map((t: string) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE;`;
+        await query(truncateQuery);
 
         console.log('✅ Database reset completed');
 
         res.json({
             success: true,
-            message: 'Database reset successfully. All orders and sessions have been cleared.'
+            message: `Database reset successfully. Cleared ${tablesToTruncate.length} tables.`
         });
     } catch (error) {
         console.error('❌ Database reset failed:', error);

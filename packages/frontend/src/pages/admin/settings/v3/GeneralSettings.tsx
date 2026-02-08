@@ -37,6 +37,7 @@ export default function GeneralSettings({ settings, onChange }: Props) {
         brand_icon: '🍜',
     };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleChange = (key: keyof StoreSettings, value: any) => {
         if (onChange) {
             onChange({ ...data, [key]: value });

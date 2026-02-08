@@ -29,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     email: payload.email,
                     name: payload.name,
                     role: payload.role,
+                    is_active: true
                 });
 
                 // Connect socket and join room based on role
@@ -40,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 } else {
                     socketService.joinRoom('pos', payload.id);
                 }
-            } catch {
+            } catch (error) {
                 localStorage.removeItem('token');
             }
         }

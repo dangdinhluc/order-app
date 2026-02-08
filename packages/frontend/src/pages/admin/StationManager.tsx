@@ -99,6 +99,7 @@ export default function StationManager() {
             }
             setIsModalOpen(false);
             loadStations();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
             setError(err.message || 'Có lỗi xảy ra');
         }
@@ -113,6 +114,7 @@ export default function StationManager() {
         try {
             await api.deleteStation(deleteStationId);
             loadStations();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
             setError(err.message || 'Không thể xóa station');
         } finally {

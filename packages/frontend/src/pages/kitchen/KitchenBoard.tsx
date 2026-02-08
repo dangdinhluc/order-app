@@ -111,15 +111,6 @@ export default function KitchenBoard() {
     const handleStatusChange = () => loadQueue();
     const handleItemCancelled = () => loadQueue();
 
-    const handleMarkPreparing = async (itemId: string) => {
-        try {
-            await api.updateKitchenItemStatus(itemId, 'preparing');
-            loadQueue();
-        } catch (error) {
-            console.error('Error updating status:', error);
-        }
-    };
-
     const handleMarkReady = async (itemId: string) => {
         try {
             await api.markItemReady(itemId);
@@ -130,7 +121,8 @@ export default function KitchenBoard() {
     };
 
     // Real-time timer calculation
-    const getTimeSince = useCallback((createdAt: string) => {
+    const getTimeSince = useCallback((createdAt: string | undefined) => {
+        if (!createdAt) return 0;
         const created = new Date(createdAt).getTime();
         const diff = Math.floor((currentTime - created) / 1000 / 60);
         return diff < 0 ? 0 : diff;

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { syncManager } from './utils/syncManager';
 import { ToastProvider } from './components/Toast';
 import { DialogProvider } from './components/ui/DialogProvider';
@@ -292,13 +293,15 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ToastProvider>
-          <DialogProvider>
-            <AppRoutes />
-            <OfflineIndicator />
-            <InstallPWA />
-          </DialogProvider>
-        </ToastProvider>
+        <LanguageProvider>
+          <ToastProvider>
+            <DialogProvider>
+              <AppRoutes />
+              <OfflineIndicator />
+              <InstallPWA />
+            </DialogProvider>
+          </ToastProvider>
+        </LanguageProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -1,4 +1,4 @@
-import { openDB, IDBPDatabase } from 'idb';
+import { openDB, type IDBPDatabase } from 'idb';
 
 const DB_NAME = 'order-app-offline';
 const STORE_NAME = 'pending-sync';
@@ -9,6 +9,7 @@ export interface OfflineItem {
     localId: string;
     endpoint: string;
     method: string;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     body: any;
     timestamp: number;
     status: 'pending' | 'syncing' | 'failed';

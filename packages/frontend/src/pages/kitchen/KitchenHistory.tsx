@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api';
 import type { KitchenItem } from '../../services/api';
-import { Clock, RefreshCw, CheckCircle2, XCircle, Search, Filter } from 'lucide-react';
+import { Clock, RefreshCw, CheckCircle2, XCircle, Search } from 'lucide-react';
 
 export default function KitchenHistory() {
     const [items, setItems] = useState<KitchenItem[]>([]);
@@ -118,8 +118,8 @@ export default function KitchenHistory() {
                     <button
                         onClick={() => setStatusFilter('all')}
                         className={`px-4 py-2 rounded-xl font-medium transition-all ${statusFilter === 'all'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                             }`}
                     >
                         Tất cả
@@ -127,8 +127,8 @@ export default function KitchenHistory() {
                     <button
                         onClick={() => setStatusFilter('ready')}
                         className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-1.5 ${statusFilter === 'ready'
-                                ? 'bg-emerald-600 text-white'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                             }`}
                     >
                         <CheckCircle2 size={16} /> Hoàn thành
@@ -136,8 +136,8 @@ export default function KitchenHistory() {
                     <button
                         onClick={() => setStatusFilter('cancelled')}
                         className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-1.5 ${statusFilter === 'cancelled'
-                                ? 'bg-red-600 text-white'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                            ? 'bg-red-600 text-white'
+                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                             }`}
                     >
                         <XCircle size={16} /> Đã hủy
@@ -186,7 +186,7 @@ export default function KitchenHistory() {
                             filteredItems.map((item) => (
                                 <tr key={item.id} className="hover:bg-slate-700/50 transition-colors">
                                     <td className="p-4 font-mono text-slate-300">
-                                        {formatTime(item.kitchen_ready_at || item.created_at)}
+                                        {formatTime(item.kitchen_ready_at || item.created_at || new Date().toISOString())}
                                     </td>
                                     <td className="p-4 font-bold text-orange-300">
                                         {item.table_name || `Bàn ${item.table_number}`}
@@ -212,7 +212,7 @@ export default function KitchenHistory() {
                                         )}
                                     </td>
                                     <td className="p-4 text-slate-400 font-mono text-sm">
-                                        {getDuration(item.kitchen_started_at || item.created_at, item.kitchen_ready_at)}
+                                        {getDuration(item.kitchen_started_at || item.created_at || new Date().toISOString(), item.kitchen_ready_at)}
                                     </td>
                                 </tr>
                             ))

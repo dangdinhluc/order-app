@@ -4,7 +4,7 @@ import { query } from '../db/pool.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { AuthRequest, requireRole } from '../middleware/auth.js';
 
-const router = Router();
+const router: Router = Router();
 
 // Validation schemas
 const createBadgeSchema = z.object({

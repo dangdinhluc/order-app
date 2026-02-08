@@ -79,6 +79,30 @@ html {
     /* Chrome, Safari, Opera */
 }
 
+/* Scrollbar hide for Tailwind compatibility */
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* Horizontal scroll with fade indicators */
+.scroll-fade {
+    mask-image: linear-gradient(to right,
+            transparent,
+            black 20px,
+            black calc(100% - 20px),
+            transparent);
+    -webkit-mask-image: linear-gradient(to right,
+            transparent,
+            black 20px,
+            black calc(100% - 20px),
+            transparent);
+}
+
 /* iOS momentum scrolling - critical for smooth scroll on mobile Safari */
 .touch-scroll {
     -webkit-overflow-scrolling: touch;
@@ -131,6 +155,42 @@ html,
 body,
 #root {
     height: 100%;
+}
+
+/* ============================================
+   MOBILE VIEWPORT FIXES (iOS Safari Keyboard Bug)
+   ============================================ */
+
+/* Use dynamic viewport height to handle iOS Safari keyboard properly */
+@supports (height: 100dvh) {
+
+    html,
+    body,
+    #root {
+        height: 100dvh;
+        min-height: 100dvh;
+    }
+}
+
+/* Prevent iOS zoom on input focus */
+input,
+textarea,
+select {
+    font-size: 16px !important;
+}
+
+/* Prevent body scroll when modals are open (iOS fix) */
+body.modal-open {
+    position: fixed;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* iOS safe area insets for full-screen apps */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .sticky-bottom {
+        padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+    }
 }
 
 /* Animations */

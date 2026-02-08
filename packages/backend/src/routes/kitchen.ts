@@ -3,7 +3,7 @@ import { query } from '../db/pool.js';
 import { AuthRequest, requireRole } from '../middleware/auth.js';
 import { Server as SocketIOServer } from 'socket.io';
 
-const router = Router();
+const router: Router = Router();
 
 // GET /api/kitchen/queue - Get items pending in kitchen
 // Optional: ?station_id=uuid to filter by station

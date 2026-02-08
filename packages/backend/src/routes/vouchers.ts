@@ -4,7 +4,7 @@ import { query } from '../db/pool.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { AuthRequest, requireRole } from '../middleware/auth.js';
 
-const router = Router();
+const router: Router = Router();
 
 const createVoucherSchema = z.object({
     code: z.string().min(3).max(20).regex(/^[A-Za-z0-9_-]+$/),

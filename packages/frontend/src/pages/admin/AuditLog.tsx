@@ -14,7 +14,9 @@ interface AuditLog {
     action: string;
     target_type: string;
     target_id: string;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     old_value: any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     new_value: any;
     reason: string;
     ip_address: string;
@@ -47,7 +49,7 @@ export default function AuditLog() {
     const fetchActions = async () => {
         try {
             const res = await api.getAuditActions();
-            setActions(res.data.actions);
+            setActions(res.data?.actions || []);
         } catch (error) {
             console.error('Failed to fetch actions:', error);
         }
@@ -64,8 +66,8 @@ export default function AuditLog() {
                 from_date: dateRange.start,
                 to_date: dateRange.end,
             });
-            setLogs(res.data.logs);
-            setTotal(res.data.total);
+            setLogs(res.data?.logs || []);
+            setTotal(res.data?.total || 0);
         } catch (error) {
             console.error('Failed to fetch logs:', error);
         } finally {

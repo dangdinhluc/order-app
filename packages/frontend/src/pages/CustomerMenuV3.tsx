@@ -3,10 +3,16 @@ import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, ShoppingCart, Plus, Minus, X, Bell, Menu,
-    Loader2, Sparkles, Flame, Star, Clock, RefreshCw, ChevronDown
+    Loader2, Sparkles, Flame, Star, Clock, RefreshCw
 } from 'lucide-react';
 import { useDialog } from '../components/ui/DialogProvider';
 import SuccessCelebration from '../components/ui/SuccessCelebration';
+import { api, type Language as ApiLanguage } from '../services/api';
+import { getTranslatedField } from '../utils/languageUtils';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { useLanguage } from '../context/LanguageContext';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import LanguageSwitcher from '../components/LanguageSwitcher';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -22,6 +28,12 @@ interface Product {
     featured_badge?: string;
     is_best_seller?: boolean;
     is_chef_choice?: boolean;
+    // Translation fields
+    name_vi?: string;
+    name_ja?: string;
+    name_en?: string;
+    name_translations?: Record<string, string>;
+    description_translations?: Record<string, string>;
 }
 
 interface Category {
@@ -30,6 +42,11 @@ interface Category {
     icon?: string;
     sort_order: number;
     products: Product[];
+    // Translation fields
+    name_vi?: string;
+    name_ja?: string;
+    name_en?: string;
+    name_translations?: Record<string, string>;
 }
 
 interface CartItem {
@@ -81,7 +98,8 @@ interface SlideshowImage {
     title?: string;
 }
 
-type Language = 'vi' | 'jp' | 'cn';
+// Use string for dynamic language codes
+type Language = string;
 type AppState = 'idle' | 'language' | 'menu';
 
 const IDLE_TIMEOUT = 120000;
@@ -92,13 +110,16 @@ const getImageUrl = (url?: string) => {
     return `${API_BASE}${url}`;
 };
 
-const LANG_LABELS: Record<Language, { flag: string; name: string; welcome: string; tap: string }> = {
+// Default labels for hardcoded languages, others will fallback to English/Vietnam
+const LANG_LABELS: Record<string, { flag?: string; name?: string; welcome: string; tap: string }> = {
     vi: { flag: '🇻🇳', name: 'Tiếng Việt', welcome: 'Chào mừng quý khách', tap: 'Chạm để bắt đầu' },
     jp: { flag: '🇯🇵', name: '日本語', welcome: 'いらっしゃいませ', tap: 'タップして開始' },
     cn: { flag: '🇨🇳', name: '中文', welcome: '欢迎光临', tap: '点击开始' },
+    en: { flag: '🇺🇸', name: 'English', welcome: 'Welcome', tap: 'Tap to start' },
+    ko: { flag: '🇰🇷', name: 'Korean', welcome: '환영합니다', tap: '시작하려면 탭하세요' },
 };
 
-const UI_TEXTS: Record<Language, Record<string, string>> = {
+const UI_TEXTS: Record<string, Record<string, string>> = {
     vi: {
         search: 'Tìm món ăn...',
         featured: 'Món đặc biệt',
@@ -150,6 +171,23 @@ const UI_TEXTS: Record<Language, Record<string, string>> = {
         error: '无法加载菜单',
         table: '桌',
     },
+    en: {
+        search: 'Search menu...',
+        featured: 'Featured',
+        hot: 'Popular',
+        addToCart: 'Add to Cart',
+        cart: 'Your Order',
+        emptyCart: 'Cart is empty',
+        total: 'Total',
+        order: 'Place Order',
+        quantity: 'Quantity',
+        notes: 'Options',
+        callStaff: 'Call Staff',
+        payment: 'Bill',
+        loading: 'Loading menu...',
+        error: 'Failed to load menu',
+        table: 'Table',
+    }
 };
 
 // Premium gradient backgrounds
@@ -167,22 +205,26 @@ export default function CustomerMenuV3() {
 
     const [appState, setAppState] = useState<AppState>('idle');
     const [language, setLanguage] = useState<Language>('vi');
+    const [availableLanguages, setAvailableLanguages] = useState<ApiLanguage[]>([]);
 
     const [categories, setCategories] = useState<Category[]>([]);
     const [featured, setFeatured] = useState<Product[]>([]);
     const [slideshow, setSlideshow] = useState<SlideshowImage[]>([]);
     const [quickNotes, setQuickNotes] = useState<Record<string, QuickNote[]>>({});
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [table, setTable] = useState<{ id: string; number: number; name: string } | null>(null);
     // Branding from admin settings
     const [branding, setBranding] = useState({ name: 'GIA VỊ', slogan: 'Hương vị Việt', icon: '🍜' });
 
     const [loading, setLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [tableSession, setTableSession] = useState<TableSession | null>(null);
     const [currentOrder, setCurrentOrder] = useState<CurrentOrder | null>(null);
     const [showHistory, setShowHistory] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [activeCategory, setActiveCategory] = useState<string | null>(null);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -194,17 +236,33 @@ export default function CustomerMenuV3() {
     const [productNotes, setProductNotes] = useState<string[]>([]);
     const [showCategoryMenu, setShowCategoryMenu] = useState(false);
     const [flyingItems, setFlyingItems] = useState<{ id: number; x: number; y: number; image?: string }[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [highlightedFeaturedIndex, setHighlightedFeaturedIndex] = useState(0);
     const [confettiParticles, setConfettiParticles] = useState<{ id: number; x: number; y: number; color: string }[]>([]);
     const [isPulling, setIsPulling] = useState(false);
     const [pullDistance, setPullDistance] = useState(0);
     const [showSuccessCelebration, setShowSuccessCelebration] = useState(false);
     const [greetingLangIndex, setGreetingLangIndex] = useState(0); // For rotating greetings
+    const [showLanguageModal, setShowLanguageModal] = useState(false);
 
-    const GREETING_LANGUAGES: Language[] = ['vi', 'jp', 'cn'];
+    // Fetch available languages
+    useEffect(() => {
+        api.getLanguages().then(res => {
+            if (res.data?.languages) {
+                const active = res.data.languages.filter(l => l.is_active);
+                setAvailableLanguages(active);
+            }
+        }).catch(err => console.error("Failed to load languages", err));
+    }, []);
+
+    // Get display languages for greeting: use available languages if loaded, otherwise fallback
+    const displayLanguages = availableLanguages.length > 0
+        ? availableLanguages.map(l => l.code)
+        : ['vi', 'en', 'jp'];
 
     const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastActivityRef = useRef<number>(Date.now());
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const featuredScrollRef = useRef<HTMLDivElement>(null);
 
     const resetIdleTimer = useCallback(() => {
@@ -258,11 +316,12 @@ export default function CustomerMenuV3() {
     useEffect(() => {
         if (appState === 'idle') {
             const interval = setInterval(() => {
-                setGreetingLangIndex(prev => (prev + 1) % 3);
+                // Rotate through available languages
+                setGreetingLangIndex(prev => (prev + 1) % displayLanguages.length);
             }, 3000);
             return () => clearInterval(interval);
         }
-    }, [appState]);
+    }, [appState, displayLanguages.length]);
 
     const fetchMenu = useCallback(async (lang: Language) => {
         if (!tableId) return;
@@ -378,7 +437,7 @@ export default function CustomerMenuV3() {
 
         if (e) {
             const id = Date.now();
-            // @ts-ignore
+            // @ts-expect-error - e.touches comes from touch events
             const { clientX, clientY } = e.clientX ? e : (e.touches?.[0] || {});
             if (clientX) {
                 // Spawn confetti (2. Confetti animation)
@@ -514,7 +573,8 @@ export default function CustomerMenuV3() {
 
     // ==================== IDLE / WELCOME SCREEN (Merged with Language Selection) ====================
     if (appState === 'idle') {
-        const currentGreetingLang = GREETING_LANGUAGES[greetingLangIndex];
+        const currentLangCode = displayLanguages[greetingLangIndex];
+        const currentLabel = LANG_LABELS[currentLangCode] || LANG_LABELS['en'];
 
         return (
             <div className="fixed inset-0 bg-black flex items-center justify-center overflow-hidden">
@@ -558,7 +618,7 @@ export default function CustomerMenuV3() {
                     {/* Rotating Greeting - AnimatePresence for smooth transitions */}
                     <AnimatePresence mode="wait">
                         <motion.div
-                            key={currentGreetingLang}
+                            key={currentLangCode}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -20 }}
@@ -566,39 +626,42 @@ export default function CustomerMenuV3() {
                             className="mb-8"
                         >
                             <h1 className="text-3xl sm:text-4xl md:text-5xl font-light text-white mb-2 tracking-wide">
-                                {LANG_LABELS[currentGreetingLang].welcome}
+                                {currentLabel.welcome}
                             </h1>
                             <p className="text-base sm:text-lg text-amber-200/70">
-                                {LANG_LABELS[currentGreetingLang].tap}
+                                {currentLabel.tap}
                             </p>
                         </motion.div>
                     </AnimatePresence>
 
                     {/* Language Selection Buttons - Responsive */}
                     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mb-6">
-                        {GREETING_LANGUAGES.map((lang, i) => (
-                            <motion.button
-                                key={lang}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.5 + i * 0.1 }}
-                                whileHover={{ scale: 1.03 }}
-                                whileTap={{ scale: 0.97 }}
-                                onClick={() => handleLanguageSelect(lang)}
-                                className={`group flex items-center gap-3 sm:flex-col sm:gap-2 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl backdrop-blur-xl border transition-all duration-300 ${greetingLangIndex === i
+                        {displayLanguages.map((lang, i) => {
+                            const label = LANG_LABELS[lang] || { flag: '🌐', name: lang };
+                            return (
+                                <motion.button
+                                    key={lang}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.5 + i * 0.1 }}
+                                    whileHover={{ scale: 1.03 }}
+                                    whileTap={{ scale: 0.97 }}
+                                    onClick={() => handleLanguageSelect(lang)}
+                                    className={`group flex items-center gap-3 sm:flex-col sm:gap-2 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl backdrop-blur-xl border transition-all duration-300 ${greetingLangIndex === i
                                         ? 'bg-amber-500/20 border-amber-400/50'
                                         : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
-                                    }`}
-                            >
-                                <span className="text-3xl sm:text-4xl group-hover:scale-110 transition-transform duration-300">
-                                    {LANG_LABELS[lang].flag}
-                                </span>
-                                <span className={`text-sm sm:text-base font-medium transition-colors ${greetingLangIndex === i ? 'text-amber-200' : 'text-white/70 group-hover:text-white'
-                                    }`}>
-                                    {LANG_LABELS[lang].name}
-                                </span>
-                            </motion.button>
-                        ))}
+                                        }`}
+                                >
+                                    <span className="text-3xl sm:text-4xl group-hover:scale-110 transition-transform duration-300">
+                                        {label.flag}
+                                    </span>
+                                    <span className={`text-sm sm:text-base font-medium transition-colors ${greetingLangIndex === i ? 'text-amber-200' : 'text-white/70 group-hover:text-white'
+                                        }`}>
+                                        {label.name}
+                                    </span>
+                                </motion.button>
+                            );
+                        })}
                     </div>
 
                     {/* Hint text */}
@@ -801,10 +864,10 @@ export default function CustomerMenuV3() {
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
-                                onClick={() => setAppState('language')}
+                                onClick={() => setShowLanguageModal(true)}
                                 className="w-10 h-10 rounded-xl bg-white/10 hover:bg-amber-500/20 flex items-center justify-center transition-colors border border-white/5 text-xl"
                             >
-                                {LANG_LABELS[language].flag}
+                                {(LANG_LABELS[language] || { flag: '🌐' }).flag}
                             </motion.button>
                         </div>
                     </div>
@@ -952,9 +1015,9 @@ export default function CustomerMenuV3() {
 
                                                     {/* Info Overlay - Apple Style */}
                                                     <div className="absolute bottom-0 left-0 right-0 p-5">
-                                                        <h4 className="text-white font-bold text-xl leading-tight mb-1 drop-shadow-lg">{product.name}</h4>
+                                                        <h4 className="text-white font-bold text-xl leading-tight mb-1 drop-shadow-lg">{getTranslatedField(product, 'name', language)}</h4>
                                                         {product.description && (
-                                                            <p className="text-white/70 text-sm line-clamp-1 mb-3">{product.description}</p>
+                                                            <p className="text-white/70 text-sm line-clamp-1 mb-3">{getTranslatedField(product, 'description', language)}</p>
                                                         )}
                                                         <div className="flex items-center justify-between">
                                                             <span className="text-amber-400 font-bold text-2xl drop-shadow-md">¥{product.price.toLocaleString()}</span>
@@ -1072,9 +1135,9 @@ export default function CustomerMenuV3() {
 
                                                 {/* Info Below - No Overlay */}
                                                 <div className="p-3 bg-stone-800/80">
-                                                    <h4 className="text-white font-semibold text-sm leading-tight line-clamp-2 mb-1">{product.name}</h4>
+                                                    <h4 className="text-white font-semibold text-sm leading-tight line-clamp-2 mb-1">{getTranslatedField(product, 'name', language)}</h4>
                                                     {product.description && (
-                                                        <p className="text-white/40 text-[10px] line-clamp-1 mb-2">{product.description}</p>
+                                                        <p className="text-white/40 text-[10px] line-clamp-1 mb-2">{getTranslatedField(product, 'description', language)}</p>
                                                     )}
                                                     <span className="text-amber-400 font-bold text-base">¥{product.price.toLocaleString()}</span>
                                                 </div>
@@ -1181,9 +1244,9 @@ export default function CustomerMenuV3() {
             <SuccessCelebration
                 isOpen={showSuccessCelebration}
                 onClose={() => setShowSuccessCelebration(false)}
-                title={language === 'vi' ? 'Đặt hàng thành công!' : language === 'jp' ? '注文成功！' : '订单成功！'}
-                message={language === 'vi' ? 'Cảm ơn quý khách!' : language === 'jp' ? 'ありがとうございます！' : '感谢您！'}
-                subMessage={language === 'vi' ? 'Món ăn sẽ được phục vụ trong 10-15 phút' : language === 'jp' ? '10〜15分でお届けします' : '10-15分钟内送达'}
+                title={language === 'vi' ? 'Đặt hàng thành công!' : language === 'jp' ? '注文成功！' : language === 'en' ? 'Order Successful!' : '订单成功！'}
+                message={language === 'vi' ? 'Cảm ơn quý khách!' : language === 'jp' ? 'ありがとうございます！' : language === 'en' ? 'Thank you!' : '感谢您！'}
+                subMessage={language === 'vi' ? 'Món ăn sẽ được phục vụ trong 10-15 phút' : language === 'jp' ? '10〜15分でお届けします' : language === 'en' ? 'Served in 10-15 mins' : '10-15分钟内送达'}
                 brandName={branding.name}
                 autoDismissMs={5000}
             />
@@ -1232,11 +1295,11 @@ export default function CustomerMenuV3() {
 
                             {/* Content */}
                             <div className="flex-1 overflow-y-auto p-6 -mt-10 relative">
-                                <h2 className="text-2xl font-bold text-white mb-2">{selectedProduct.name}</h2>
+                                <h2 className="text-2xl font-bold text-white mb-2">{getTranslatedField(selectedProduct, 'name', language)}</h2>
                                 <p className="text-3xl font-bold text-amber-400 mb-4">¥{selectedProduct.price.toLocaleString()}</p>
 
                                 {selectedProduct.description && (
-                                    <p className="text-white/60 mb-6 leading-relaxed">{selectedProduct.description}</p>
+                                    <p className="text-white/60 mb-6 leading-relaxed">{getTranslatedField(selectedProduct, 'description', language)}</p>
                                 )}
 
                                 {/* Quick Notes */}
@@ -1322,6 +1385,62 @@ export default function CustomerMenuV3() {
                 )}
             </AnimatePresence>
 
+            {/* Language Switcher Modal */}
+            <AnimatePresence>
+                {showLanguageModal && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowLanguageModal(false)}
+                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="bg-stone-900 border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl relative"
+                            >
+                                <button
+                                    onClick={() => setShowLanguageModal(false)}
+                                    className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+
+                                <h3 className="text-xl font-bold text-white mb-6 text-center">Language / 言語 / 语言</h3>
+
+                                <div className="grid grid-cols-1 gap-3">
+                                    {displayLanguages.map((lang) => {
+                                        const label = LANG_LABELS[lang] || { flag: '🌐', name: lang };
+                                        const isActive = language === lang;
+                                        return (
+                                            <button
+                                                key={lang}
+                                                onClick={() => {
+                                                    setLanguage(lang);
+                                                    setShowLanguageModal(false);
+                                                }}
+                                                className={`flex items-center gap-4 p-4 rounded-xl transition-all ${isActive
+                                                    ? 'bg-amber-500 text-black font-bold shadow-lg shadow-amber-500/20'
+                                                    : 'bg-white/5 text-white hover:bg-white/10'
+                                                    }`}
+                                            >
+                                                <span className="text-3xl">{label.flag}</span>
+                                                <span className="text-lg">{label.name}</span>
+                                                {isActive && <span className="ml-auto">✓</span>}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
             {/* Cart Drawer */}
             <AnimatePresence>
                 {showCart && (
@@ -1380,7 +1499,7 @@ export default function CustomerMenuV3() {
                                                     )}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <h4 className="text-white font-medium line-clamp-1">{item.product.name}</h4>
+                                                    <h4 className="text-white font-medium line-clamp-1">{getTranslatedField(item.product, 'name', language)}</h4>
                                                     <p className="text-amber-400 font-bold">¥{item.product.price.toLocaleString()}</p>
                                                     {item.notes.length > 0 && (
                                                         <p className="text-xs text-white/40 mt-1 line-clamp-1">{item.notes.join(', ')}</p>
@@ -1479,7 +1598,7 @@ export default function CustomerMenuV3() {
                                                     body: JSON.stringify({ table_id: tableId, type: action.type })
                                                 });
                                                 setShowQuickActions(false);
-                                            } catch { }
+                                            } catch (error) { /* ignore */ }
                                         }}
                                         className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-400/50 hover:bg-white/10 transition-all"
                                     >
@@ -1593,7 +1712,7 @@ export default function CustomerMenuV3() {
                                                 });
                                                 alert(language === 'vi' ? 'Đã gọi thanh toán!' : 'Payment requested!');
                                                 setShowHistory(false);
-                                            } catch { }
+                                            } catch (error) { /* ignore */ }
                                         }}
                                         className="w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold text-white transition-colors"
                                     >

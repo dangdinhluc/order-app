@@ -3,7 +3,7 @@ import { query } from '../db/pool.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { AuthRequest } from '../middleware/auth.js';
 
-const router = Router();
+const router: Router = Router();
 
 // Generate receipt HTML for an order
 async function generateReceiptHTML(orderId: string): Promise<string> {

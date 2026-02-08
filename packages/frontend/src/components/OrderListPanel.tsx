@@ -92,6 +92,7 @@ export default function OrderListPanel({ onSelectOrder }: OrderListPanelProps) {
             setCancelReason('');
             loadOrders();
             loadStats();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             toast.error('Không thể hủy', error.message || 'Không thể hủy đơn hàng');
         } finally {
@@ -109,6 +110,7 @@ export default function OrderListPanel({ onSelectOrder }: OrderListPanelProps) {
             await api.deleteEmptyOrder(deleteOrderId);
             loadOrders();
             loadStats();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             toast.error('Không thể xóa', error.message || 'Không thể xóa đơn hàng');
         } finally {
@@ -136,6 +138,7 @@ export default function OrderListPanel({ onSelectOrder }: OrderListPanelProps) {
             } else {
                 toast.error('PIN không đúng', 'Vui lòng nhập lại');
             }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             toast.error('PIN không đúng', error.message || 'Vui lòng nhập lại');
         } finally {

@@ -2,7 +2,7 @@ import express from 'express';
 import { query } from '../db/pool.js';
 import { emitToKitchen } from '../socket/index.js';
 
-export const customerRouter = express.Router();
+export const customerRouter: express.Router = express.Router();
 
 // ============================================
 // PUBLIC ROUTES - No authentication required

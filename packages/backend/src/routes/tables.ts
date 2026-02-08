@@ -6,7 +6,7 @@ import { AuthRequest, requireRole } from '../middleware/auth.js';
 import { Server as SocketIOServer } from 'socket.io';
 import crypto from 'crypto';
 
-const router = Router();
+const router: Router = Router();
 
 // Validation schemas
 const createTableSchema = z.object({

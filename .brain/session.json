@@ -1,16 +1,40 @@
 {
-    "updated_at": "2026-02-01T08:09:00+09:00",
+    "updated_at": "2026-02-08T10:30:00+09:00",
     "working_on": {
-        "feature": "Customer Menu V4 - Enhanced Polish",
-        "task": "Completed all V4 features and polish",
+        "feature": "Multi-language Support",
+        "task": "Admin UI Refactoring",
         "status": "completed",
+        "last_run": "2026-02-08T10:30:00+09:00",
+        "last_run_url": "http://localhost:5173",
+        "backend_url": "http://localhost:3001",
+        "database": "Neon DB (Remote)",
         "files": [
-            "packages/frontend/src/pages/CustomerMenuV4.tsx",
-            "packages/frontend/src/App.tsx"
-        ],
-        "notes": "V4 is now the default customer menu route"
+            "packages/frontend/src/pages/admin/MenuManager.tsx",
+            "packages/frontend/src/components/admin/ProductForm.tsx",
+            "packages/frontend/src/components/admin/CategoryManager.tsx"
+        ]
     },
     "recent_changes": [
+        {
+            "timestamp": "2026-02-08T10:30:00+09:00",
+            "type": "refactor",
+            "description": "Refactored MenuManager to use modular ProductForm and CategoryManager components"
+        },
+        {
+            "timestamp": "2026-02-08T10:00:00+09:00",
+            "type": "feature",
+            "description": "Added ProductForm and CategoryForm with multi-language tabs (VI, EN, JA)"
+        },
+        {
+            "timestamp": "2026-02-08T09:00:00+09:00",
+            "type": "feature",
+            "description": "Implemented Backend API for Languages and Translations"
+        },
+        {
+            "timestamp": "2026-02-08T08:30:00+09:00",
+            "type": "database",
+            "description": "Added languages table and translation columns to products/categories"
+        },
         {
             "timestamp": "2026-02-01T08:09:00+09:00",
             "type": "feature",
@@ -35,6 +59,11 @@
             "timestamp": "2026-01-30T01:00:00+09:00",
             "type": "database",
             "description": "payment_methods table - 006_payment_methods.sql migration"
+        },
+        {
+            "timestamp": "2026-02-08T11:30:00+09:00",
+            "type": "feature",
+            "description": "Completed Customer View Multi-language support (UI & Data translation)"
         }
     ],
     "decisions_made": [
@@ -57,6 +86,10 @@
         {
             "decision": "Public endpoint for payment methods",
             "reason": "POS checkout needs data without extra auth check"
+        },
+        {
+            "decision": "Use localStorage for customer language",
+            "reason": "Simple persistence without requiring customer authentication"
         }
     ],
     "pending_tasks": [

@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import LanguageSwitcher from './LanguageSwitcher';
 import {
     LayoutGrid,
     UtensilsCrossed,
@@ -15,8 +17,13 @@ import {
     Users,
     Activity,
     DollarSign,
-    History
+    History,
+    Star,
+    Calendar,
+    Clock
 } from 'lucide-react';
+import SyncStatusIndicator from './SyncStatusIndicator';
+import OfflineIndicator from './OfflineIndicator';
 
 interface LayoutProps {
     children: ReactNode;
@@ -24,6 +31,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
     const { user, logout } = useAuth();
+    const { currentLanguage, availableLanguages, setLanguage } = useLanguage();
     const location = useLocation();
     const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -49,6 +57,10 @@ export default function Layout({ children }: LayoutProps) {
         { path: '/reports', icon: BarChart3, label: 'Báo cáo', roles: ['owner'] },
         { path: '/cash', icon: DollarSign, label: 'Sổ quỹ', roles: ['owner'] },
         { path: '/audit', icon: Activity, label: 'Nhật ký', roles: ['owner'] },
+        { path: '/admin/loyalty', icon: Star, label: 'Tích điểm', roles: ['owner'] },
+        { path: '/admin/analytics', icon: BarChart3, label: 'Phân tích', roles: ['owner'] },
+        { path: '/admin/schedule', icon: Calendar, label: 'Lịch làm việc', roles: ['owner'] },
+        { path: '/admin/timeclock', icon: Clock, label: 'Chấm công', roles: ['owner', 'cashier'] },
         { path: '/admin/settings/customer', icon: LayoutGrid, label: 'Giao diện khách', roles: ['owner'] },
         { path: '/settings', icon: Settings, label: 'Cài đặt', roles: ['owner'] },
     ];
@@ -205,6 +217,9 @@ export default function Layout({ children }: LayoutProps) {
                     </button>
 
                     <div className="flex items-center gap-4 ml-auto">
+                        {/* Hybrid Sync Status */}
+                        <SyncStatusIndicator />
+
                         {/* Notifications */}
                         <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition">
                             <Bell size={20} />
@@ -214,6 +229,15 @@ export default function Layout({ children }: LayoutProps) {
                                 </span>
                             )}
                         </button>
+
+                        {/* Language Switcher */}
+                        <div className="hidden md:block">
+                            <LanguageSwitcher
+                                currentLang={currentLanguage}
+                                languages={availableLanguages}
+                                onSelect={setLanguage}
+                            />
+                        </div>
 
                         {/* User info */}
                         <div className="flex items-center gap-3 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
@@ -243,6 +267,8 @@ export default function Layout({ children }: LayoutProps) {
                     onClick={() => setIsSidebarOpen(false)}
                 />
             )}
+
+            <OfflineIndicator />
         </div>
     );
 }

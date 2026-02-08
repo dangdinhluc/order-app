@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { query } from '../db/pool.js';
 import { AuthRequest, requireRole } from '../middleware/auth.js';
 
-const router = Router();
+const router: Router = Router();
 
 // GET /api/reports/sales - Sales report
 router.get('/sales', requireRole('owner', 'cashier'), async (req: Request, res: Response, next: NextFunction) => {

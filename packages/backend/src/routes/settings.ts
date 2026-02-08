@@ -6,7 +6,7 @@ import { ApiError } from '../middleware/errorHandler.js';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 
-const router = Router();
+const router: Router = Router();
 
 // Configure Cloudinary
 cloudinary.config({

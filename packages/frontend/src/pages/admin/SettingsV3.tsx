@@ -1,23 +1,21 @@
 import { useState, useEffect } from 'react';
 import {
-    Store, Receipt, Printer, Shield, Bell, Monitor,
-    CreditCard, Save, Loader2, Check, ChefHat, Settings2
+    Store, Receipt, Printer, Shield, Bell,
+    CreditCard, Save, Loader2, Check, ChefHat
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../services/api';
 
 // V3 Settings Components
 import GeneralSettings from './settings/v3/GeneralSettings';
-import DisplaySettings from './settings/v3/DisplaySettings';
 import PrinterSettings from './settings/v3/PrinterSettings';
 import SecuritySettings from './settings/v3/SecuritySettings';
 import NotificationSettings from './settings/v3/NotificationSettings';
 import PaymentSettings from './settings/v3/PaymentSettings';
 import ReceiptSettings from './settings/v3/ReceiptSettings';
 import StationManager from './StationManager';
-import ProductOptionsSettings from './settings/v3/ProductOptionsSettings';
 
-type TabId = 'general' | 'display' | 'receipt' | 'printer' | 'payment' | 'security' | 'notifications' | 'stations' | 'product-options';
+type TabId = 'general' | 'receipt' | 'printer' | 'payment' | 'security' | 'notifications' | 'stations';
 
 export default function SettingsV3() {
     const [activeTab, setActiveTab] = useState<TabId>('general');
@@ -27,6 +25,7 @@ export default function SettingsV3() {
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [allSettings, setAllSettings] = useState<any>({});
 
     useEffect(() => {
@@ -60,23 +59,22 @@ export default function SettingsV3() {
         }
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateSection = (section: string, data: any) => {
-        setAllSettings(prev => ({
+        setAllSettings((prev: any) => ({
             ...prev,
             [section]: data
         }));
     };
 
     const tabs = [
-        { id: 'general' as TabId, label: 'Cửa hàng', icon: Store, description: 'Thông tin chung, ngôn ngữ' },
-        { id: 'display' as TabId, label: 'Màn hình & Bàn', icon: Monitor, description: 'Quản lý màn hình khách, bếp' },
-        { id: 'stations' as TabId, label: 'Bếp/Bar', icon: ChefHat, description: 'Quản lý trạm chế biến' },
+        { id: 'general' as TabId, label: 'Cửa hàng', icon: Store, description: 'Thông tin chung' },
         { id: 'receipt' as TabId, label: 'Hóa đơn', icon: Receipt, description: 'Logo, header, footer' },
         { id: 'printer' as TabId, label: 'Máy in', icon: Printer, description: 'Cấu hình in ấn' },
         { id: 'payment' as TabId, label: 'Thanh toán', icon: CreditCard, description: 'Phương thức thanh toán' },
-        { id: 'security' as TabId, label: 'Bảo mật', icon: Shield, description: 'Phân quyền, mã PIN' },
+        { id: 'stations' as TabId, label: 'Bếp/Bar', icon: ChefHat, description: 'Quản lý trạm chế biến' },
         { id: 'notifications' as TabId, label: 'Thông báo', icon: Bell, description: 'Telegram bot' },
-        { id: 'product-options' as TabId, label: 'Tùy chọn món', icon: Settings2, description: 'Size, không hành, topping...' },
+        { id: 'security' as TabId, label: 'Bảo mật', icon: Shield, description: 'Phân quyền, mã PIN' },
     ];
 
     const renderContent = () => {
@@ -85,8 +83,6 @@ export default function SettingsV3() {
         switch (activeTab) {
             case 'general':
                 return <GeneralSettings settings={allSettings.store_settings} onChange={d => updateSection('store_settings', d)} />;
-            case 'display':
-                return <DisplaySettings />;
             case 'receipt':
                 return <ReceiptSettings settings={allSettings.receipt_settings} onChange={d => updateSection('receipt_settings', d)} />;
             case 'printer':
@@ -99,8 +95,6 @@ export default function SettingsV3() {
                 return <NotificationSettings settings={allSettings.notification_settings} onChange={d => updateSection('notification_settings', d)} />;
             case 'stations':
                 return <StationManager />;
-            case 'product-options':
-                return <ProductOptionsSettings />;
             default:
                 return <div>Select a tab</div>;
         }

@@ -36,9 +36,12 @@ export default function QRManager() {
     const generateQRCode = async (tableId: string) => {
         try {
             const res = await api.getQRCode(tableId);
-            if (res.data) {
-                setQRCodes(prev => new Map(prev).set(tableId, res.data));
-            }
+                                        setQRCodes(prev => {
+                                            const newMap = new Map(prev);
+                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                            if (res.data) newMap.set(tableId, res.data as any);
+                                            return newMap;
+                                        });
         } catch (error) {
             console.error('Error generating QR:', error);
         }

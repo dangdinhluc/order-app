@@ -41,9 +41,11 @@ const httpServer = createServer(app);
 
 const allowedOrigins = [
     'http://localhost:5173',
-    'http://localhost:5174', // Allow port 5174
+    'http://localhost:5174',
+    'http://localhost:5175', // Allow port 5175
     'http://127.0.0.1:5173',
     'http://127.0.0.1:5174',
+    'http://127.0.0.1:5175',
     /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:517\d$/, // Allow 517x
     /^http:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:517\d$/ // Allow any IP with port 517x
 ];

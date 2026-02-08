@@ -36,6 +36,7 @@ export default function ComboEditor({ comboProduct, isOpen, onClose, allProducts
             if (res.data && res.data.items) {
                 // Map API response to local state
                 // API returns: { id (included_prod_id), name_vi, price, quantity }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
                 setItems(res.data.items.map((i: any) => ({
                     id: i.id,
                     product_id: i.id,

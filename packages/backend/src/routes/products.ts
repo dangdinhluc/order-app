@@ -7,7 +7,7 @@ import { ApiError } from '../middleware/errorHandler.js';
 import { AuthRequest, requireRole } from '../middleware/auth.js';
 import { Server as SocketIOServer } from 'socket.io';
 
-const router = Router();
+const router: Router = Router();
 
 // Configure Multer
 import { v2 as cloudinary } from 'cloudinary';
@@ -52,6 +52,8 @@ const createProductSchema = z.object({
     is_combo: z.boolean().default(false),
     badge_ids: z.array(z.string().uuid()).optional(),
     station_ids: z.array(z.string().uuid()).optional(),
+    name_translations: z.record(z.string()).optional(),
+    description_translations: z.record(z.string()).optional(),
 });
 
 const updateProductSchema = createProductSchema.partial();
@@ -181,8 +183,8 @@ router.post(
             const data = createProductSchema.parse(req.body);
 
             const result = await query(
-                `INSERT INTO products (category_id, sku, name_vi, name_ja, name_en, price, display_in_kitchen, is_available, sort_order, image_url, is_best_seller, is_chef_choice, is_combo)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                `INSERT INTO products (category_id, sku, name_vi, name_ja, name_en, price, display_in_kitchen, is_available, sort_order, image_url, is_best_seller, is_chef_choice, is_combo, name_translations, description_translations)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING *`,
                 [
                     data.category_id || null,
@@ -198,6 +200,8 @@ router.post(
                     data.is_best_seller || false,
                     data.is_chef_choice || false,
                     data.is_combo || false,
+                    data.name_translations || {},
+                    data.description_translations || {},
                 ]
             );
 
@@ -266,14 +270,13 @@ router.put(
             let paramCount = 1;
 
             Object.entries(data).forEach(([key, value]) => {
-                if (value !== undefined && key !== 'badge_ids') {
+                if (value !== undefined && key !== 'badge_ids' && key !== 'station_ids') {
                     updates.push(`${key} = $${paramCount++}`);
                     values.push(value);
                 }
             });
 
-            // If only badge_ids are provided, updates might be empty. That's fine if logic handles it.
-            // But if updates is empty and badge_ids is undefined, throw error.
+            // If only badge_ids or station_ids are provided, updates might be empty.
             if (updates.length > 0) {
                 values.push(id);
                 const result = await query(
@@ -283,8 +286,8 @@ router.put(
                 if (result.rows.length === 0) {
                     throw new ApiError('Product not found', 404, 'NOT_FOUND');
                 }
-            } else if (!data.badge_ids) {
-                // No update fields (including badge_ids)
+            } else if (!data.badge_ids && !data.station_ids) {
+                // No update fields (including badge_ids or station_ids)
                 throw new ApiError('No fields to update', 400, 'INVALID_REQUEST');
             }
 

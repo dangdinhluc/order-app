@@ -6,7 +6,7 @@ import { query } from '../db/pool.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { AuthRequest } from '../middleware/auth.js';
 
-const router = Router();
+const router: Router = Router();
 
 // Validation schemas
 const loginSchema = z.object({
@@ -52,7 +52,7 @@ router.post('/login', async (req, res, next) => {
                 role: user.role,
             },
             process.env.JWT_SECRET || 'fallback-secret',
-            { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+            { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn'] }
         );
 
         res.json({

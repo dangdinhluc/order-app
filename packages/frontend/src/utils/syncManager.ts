@@ -1,5 +1,4 @@
-import { offlineStore, OfflineItem } from './offlineStore';
-import { api } from '../services/api';
+import { offlineStore } from './offlineStore';
 import { toast } from 'react-hot-toast';
 
 class SyncManager {

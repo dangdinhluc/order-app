@@ -118,9 +118,10 @@ export default function StaffManager() {
                 </button>
             </div>
 
-            {/* User List */}
+            {/* User List - Mobile Cards / Desktop Table */}
             <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                <table className="w-full text-left">
+                {/* Desktop Table - Hidden on mobile */}
+                <table className="hidden md:table w-full text-left">
                     <thead className="bg-slate-50 border-b">
                         <tr>
                             <th className="p-4 font-semibold text-slate-600">Tên</th>
@@ -167,6 +168,63 @@ export default function StaffManager() {
                         ))}
                     </tbody>
                 </table>
+
+                {/* Mobile Card View - Visible only on mobile */}
+                <div className="md:hidden divide-y">
+                    {users.map(user => (
+                        <div key={user.id} className="p-4 space-y-3">
+                            {/* Header: Avatar + Name + Status */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-500">
+                                        <UserIcon size={24} />
+                                    </div>
+                                    <div>
+                                        <div className="font-semibold text-slate-800">{user.name}</div>
+                                        <div className="text-sm text-slate-500">{user.email}</div>
+                                    </div>
+                                </div>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${user.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                                    {user.is_active ? 'Hoạt động' : 'Vô hiệu'}
+                                </span>
+                            </div>
+
+                            {/* Role Badge */}
+                            <div className="flex items-center justify-between">
+                                <span className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize 
+                                    ${user.role === 'owner' ? 'bg-blue-50 text-blue-800' :
+                                        user.role === 'kitchen' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>
+                                    {user.role === 'owner' ? 'Chủ quán' : user.role === 'kitchen' ? 'Bếp' : 'Thu ngân'}
+                                </span>
+
+                                {/* Action Buttons - Touch Friendly */}
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => openPinModal(user)}
+                                        className="p-2.5 rounded-lg bg-orange-50 text-orange-600 active:bg-orange-100"
+                                        title="Đổi PIN"
+                                    >
+                                        <KeyRound size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => openEditModal(user)}
+                                        className="p-2.5 rounded-lg bg-blue-50 text-blue-600 active:bg-blue-100"
+                                        title="Sửa"
+                                    >
+                                        <Pencil size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDeleteUser(user.id)}
+                                        className="p-2.5 rounded-lg bg-red-50 text-red-600 active:bg-red-100"
+                                        title="Xóa"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
 
             {/* User Modal */}
@@ -230,6 +288,7 @@ export default function StaffManager() {
                                 <select
                                     className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
                                     value={userForm.role}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
                                     onChange={e => setUserForm({ ...userForm, role: e.target.value as any })}
                                 >
                                     <option value="cashier">Thu ngân</option>

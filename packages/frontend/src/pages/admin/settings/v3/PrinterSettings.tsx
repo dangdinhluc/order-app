@@ -20,6 +20,7 @@ export default function PrinterSettings({ settings, onChange }: Props) {
         paper_width: '80mm',
     };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleChange = (key: keyof PrinterSettings, value: any) => {
         if (onChange) onChange({ ...data, [key]: value });
     };

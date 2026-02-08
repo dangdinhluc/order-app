@@ -1,10 +1,12 @@
 import { Edit3, Plus, ChefHat } from 'lucide-react';
 import type { Product } from '../services/api';
+import { getTranslatedField } from '../utils/languageUtils';
 
 interface ProductCardProps {
     product: Product;
     onQuickAdd: (product: Product) => void;
     onEdit: (product: Product) => void;
+    language?: string;
 }
 
 // Color palette for product cards without images
@@ -25,8 +27,9 @@ function getPlaceholderColor(productId: string) {
     return PLACEHOLDER_COLORS[hash % PLACEHOLDER_COLORS.length];
 }
 
-export default function ProductCard({ product, onQuickAdd, onEdit }: ProductCardProps) {
+export default function ProductCard({ product, onQuickAdd, onEdit, language = 'vi' }: ProductCardProps) {
     const placeholderColor = getPlaceholderColor(product.id);
+    const displayName = getTranslatedField(product, 'name', language);
 
     return (
         <div
@@ -40,7 +43,7 @@ export default function ProductCard({ product, onQuickAdd, onEdit }: ProductCard
                     {product.image_url ? (
                         <img
                             src={product.image_url.startsWith('http') ? product.image_url : `${import.meta.env.VITE_API_URL}${product.image_url}`}
-                            alt={product.name_vi}
+                            alt={displayName}
                             className="w-full h-full object-cover"
                             onError={(e) => {
                                 (e.target as HTMLImageElement).src = 'https://placehold.co/200?text=🍜';
@@ -50,11 +53,12 @@ export default function ProductCard({ product, onQuickAdd, onEdit }: ProductCard
                         /* Beautiful placeholder when no image */
                         <div className={`w-full h-full flex flex-col items-center justify-center ${placeholderColor.bg} ${placeholderColor.text} p-2`}>
                             <span className="text-2xl md:text-3xl font-black uppercase tracking-tight text-center leading-tight drop-shadow-sm">
-                                {product.name_vi.length > 8
-                                    ? product.name_vi.substring(0, 8)
-                                    : product.name_vi}
+                                {displayName.length > 8
+                                    ? displayName.substring(0, 8)
+                                    : displayName}
                             </span>
-                            {product.name_ja && (
+                            {/* Only show secondary language if needed, e.g. for VI we show JA if available */}
+                            {language === 'vi' && product.name_ja && (
                                 <span className="text-xs opacity-80 mt-1 truncate max-w-full">
                                     {product.name_ja}
                                 </span>
@@ -92,15 +96,20 @@ export default function ProductCard({ product, onQuickAdd, onEdit }: ProductCard
 
                 {/* Content Info - Always visible */}
                 <div className="p-2.5 border-t border-slate-100">
-                    {/* Product Name - Vietnamese */}
+                    {/* Product Name */}
                     <h4 className="font-bold text-slate-800 text-sm leading-tight line-clamp-1">
-                        {product.name_vi}
+                        {displayName}
                     </h4>
 
-                    {/* Japanese Name - Show if exists */}
-                    {product.name_ja && (
+                    {/* Secondary Name - Logic: Show JA if VI selected. Show VI if non-VI selected (as fallback/original) */}
+                    {language === 'vi' && product.name_ja && (
                         <p className="text-[11px] text-slate-400 truncate mt-0.5">
                             {product.name_ja}
+                        </p>
+                    )}
+                    {language !== 'vi' && (
+                        <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                            {product.name_vi}
                         </p>
                     )}
 
