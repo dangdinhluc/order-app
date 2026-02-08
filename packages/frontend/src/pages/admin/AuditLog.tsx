@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import {
-    Shield, Search, Filter, Calendar, User, Eye,
-    AlertTriangle, Check, X, FileText, ChevronLeft, ChevronRight
+    Shield, Filter, Calendar, Eye,
+    X, FileText, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -32,7 +32,7 @@ export default function AuditLog() {
     // Filters
     const [actions, setActions] = useState<string[]>([]);
     const [selectedAction, setSelectedAction] = useState('');
-    const [selectedUser, setSelectedUser] = useState('');
+    const [selectedUser] = useState('');
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
     // Details Modal

@@ -1,10 +1,61 @@
 @import "tailwindcss";
 
+@theme {
+    /* Brand Colors */
+    --color-primary: rgb(var(--color-primary));
+    --color-primary-light: rgb(var(--color-primary-light));
+    --color-primary-dark: rgb(var(--color-primary-dark));
+
+    /* Secondary / Accent */
+    --color-secondary: rgb(var(--color-secondary));
+    --color-secondary-light: rgb(var(--color-secondary-light));
+    --color-secondary-dark: rgb(var(--color-secondary-dark));
+
+    /* Functional Colors */
+    --color-success: rgb(var(--color-success));
+    --color-warning: rgb(var(--color-warning));
+    --color-danger: rgb(var(--color-danger));
+
+    /* Backgrounds */
+    --color-bg-body: rgb(var(--color-bg-body));
+    --color-bg-card: rgb(var(--color-bg-card));
+}
+
 /* Custom styles for Hybrid POS */
 :root {
-    --color-primary: #8b5cf6;
-    --color-secondary: #f97316;
+    /* Brand Colors */
+    --color-primary: 37 99 235;      /* blue-600 */
+    --color-primary-light: 96 165 250; /* blue-400 */
+    --color-primary-dark: 29 78 216;   /* blue-700 */
+
+    /* Secondary / Accent */
+    --color-secondary: 249 115 22;   /* orange-500 */
+    --color-secondary-light: 251 146 60; /* orange-400 */
+    --color-secondary-dark: 194 65 12;   /* orange-700 */
+
+    /* Functional Colors */
+    --color-success: 16 185 129;     /* emerald-500 */
+    --color-warning: 245 158 11;     /* amber-500 */
+    --color-danger: 239 68 68;       /* red-500 */
+
+    /* Backgrounds */
+    --color-bg-body: 248 250 252;    /* slate-50 */
+    --color-bg-card: 255 255 255;    /* white */
+
     font-family: 'Inter', 'Noto Sans JP', system-ui, sans-serif;
+}
+
+/* Dark Mode Tokens (Future proofing) */
+.dark {
+    --color-bg-body: 15 23 42;       /* slate-900 */
+    --color-bg-card: 30 41 59;       /* slate-800 */
+}
+
+/* Apply variables to Tailwind classes */
+@layer base {
+    body {
+        @apply bg-[rgb(var(--color-bg-body))] text-slate-900;
+    }
 }
 
 /* Customer Menu V2 - Dark Theme (BBQ/Sushi Style) */

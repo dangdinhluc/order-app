@@ -202,7 +202,7 @@ customerRouter.get('/menu-v3/:tableId', async (req, res) => {
 
         // Get active session and order for this table
         const sessionResult = await query(`
-            SELECT 
+            SELECT
                 ts.id as session_id,
                 ts.order_id,
                 ts.started_at,
@@ -216,6 +216,7 @@ customerRouter.get('/menu-v3/:tableId', async (req, res) => {
 
         let activeSession = null;
         let currentOrder = null;
+        const isGuestMode = sessionResult.rows.length === 0;
 
         if (sessionResult.rows.length > 0) {
             const session = sessionResult.rows[0];
@@ -227,7 +228,7 @@ customerRouter.get('/menu-v3/:tableId', async (req, res) => {
 
             // Get all kitchen tickets with items for this order
             const ticketsResult = await query(`
-                SELECT 
+                SELECT
                     kt.id as ticket_id,
                     kt.ticket_number,
                     kt.sent_at,
@@ -261,7 +262,7 @@ customerRouter.get('/menu-v3/:tableId', async (req, res) => {
 
         // Get V3 settings (including branding)
         const settingsResult = await query(`
-            SELECT key, value FROM settings 
+            SELECT key, value FROM settings
             WHERE key LIKE 'customer_%' OR key LIKE 'brand_%'
         `);
 
@@ -283,7 +284,8 @@ customerRouter.get('/menu-v3/:tableId', async (req, res) => {
             quickNotes: quickNotesMap,
             active_session: activeSession,
             current_order: currentOrder,
-            settings
+            settings,
+            guest_mode: isGuestMode // Return guest mode flag
         });
     } catch (error) {
         console.error('Customer V3 menu error:', error);
@@ -301,6 +303,19 @@ customerRouter.post('/order', async (req, res) => {
 
         if (!items || items.length === 0) {
             res.status(400).json({ error: 'Vui lòng chọn ít nhất 1 món' });
+            return;
+        }
+
+        // Check if session is active (prevent orders from guest mode)
+        const activeSessionCheck = await query(
+            `SELECT id FROM table_sessions
+             WHERE table_id = $1 AND status = 'active'
+             LIMIT 1`,
+            [table_id]
+        );
+
+        if (activeSessionCheck.rows.length === 0) {
+            res.status(403).json({ error: 'Bàn chưa được mở. Vui lòng liên hệ nhân viên.' });
             return;
         }
 

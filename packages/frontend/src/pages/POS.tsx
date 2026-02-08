@@ -8,8 +8,17 @@ import ConflictResolver from '../components/ConflictResolver';
 import { toast } from 'react-hot-toast';
 import OrderListPanel from '../components/OrderListPanel';
 import PosLayout from '../components/PosLayout';
-import { Loader2, UtensilsCrossed, PackageCheck, Store, ClipboardList, History, Settings, LogOut } from 'lucide-react';
 import InvoiceHistory from './InvoiceHistory';
+import {
+    UtensilsCrossed,
+    PackageCheck,
+    Store,
+    ClipboardList,
+    History,
+    Settings,
+    LogOut,
+    Loader2
+} from 'lucide-react';
 
 // Order mode types
 type OrderMode = 'orders' | 'dine_in' | 'takeaway' | 'retail' | 'history';
@@ -271,9 +280,9 @@ export default function POS() {
                                                     ? mode.color === 'purple'
                                                         ? 'bg-purple-600 text-white shadow-lg shadow-purple-200'
                                                         : mode.color === 'blue'
-                                                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                                                            ? 'bg-primary text-white shadow-lg shadow-blue-200'
                                                             : mode.color === 'orange'
-                                                                ? 'bg-orange-500 text-white shadow-lg shadow-orange-200'
+                                                                ? 'bg-secondary text-white shadow-lg shadow-orange-200'
                                                                 : mode.color === 'slate'
                                                                     ? 'bg-slate-600 text-white shadow-lg shadow-slate-200'
                                                                     : 'bg-emerald-500 text-white shadow-lg shadow-emerald-200'

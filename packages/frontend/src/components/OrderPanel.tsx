@@ -259,11 +259,18 @@ export default function OrderPanel({ table, categories, products, onClose, order
             header_text_ja: 'ご来店ありがとうございます',
             footer_text_vi: 'Hẹn gặp lại!',
             footer_text_ja: 'またのお越しを！',
+            show_date: true,
+            show_time: true,
+            show_table: true,
             show_table_time: true,
             show_order_number: true,
             show_time_seated: false,
             show_staff_name: true,
+            show_cashier: true,
             show_qr_code: false,
+            show_wifi: false,
+            wifi_ssid: '',
+            wifi_password: '',
             font_size: 'medium' as const,
         };
         const printerSettings = {

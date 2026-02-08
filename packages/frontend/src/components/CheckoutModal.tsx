@@ -132,14 +132,16 @@ export default function CheckoutModal({ order, items = [], tableName, onClose, o
             currency: 'JPY',
         };
         const receiptSettings: ReceiptSettings = {
-            header_text: "NHÀ HÀNG IZAKAYA",
-            footer_text: "Cảm ơn quý khách!",
             logo_url: "",
             show_date: true,
             show_time: true,
+            show_table_time: false,
             show_order_number: true,
             show_table: true,
+            show_time_seated: false,
+            show_staff_name: false,
             show_cashier: true,
+            show_qr_code: false,
             font_size: "medium",
             template: "modern",
             languages: ["vi"],

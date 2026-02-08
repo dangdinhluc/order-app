@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Table, Area } from '../services/api';
 import { api } from '../services/api';
-import { Clock, Users, DollarSign, QrCode, ArrowRight, Merge, MoreHorizontal, ChefHat } from 'lucide-react';
+import { Clock, Users, QrCode, ArrowRight, Merge, MoreHorizontal } from 'lucide-react';
 import { useToast } from './Toast';
 
 interface TableMapProps {

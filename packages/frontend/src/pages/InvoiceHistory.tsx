@@ -120,11 +120,18 @@ export default function InvoiceHistory() {
                 header_text_ja: settings.header_text_ja || '',
                 footer_text_vi: settings.footer_text_vi || settings.footer_text || 'Cảm ơn quý khách!',
                 footer_text_ja: settings.footer_text_ja || 'ありがとうございます!',
+                show_date: true,
+                show_time: true,
+                show_table: true,
                 show_table_time: settings.show_table_time ?? true,
                 show_order_number: settings.show_order_number ?? true,
                 show_time_seated: true,
                 show_staff_name: true,
+                show_cashier: true,
                 show_qr_code: true,
+                show_wifi: false,
+                wifi_ssid: '',
+                wifi_password: '',
                 font_size: (settings.font_size || 'medium') as 'small' | 'medium' | 'large'
             };
 

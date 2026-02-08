@@ -47,11 +47,18 @@ export interface ReceiptSettings {
     header_text_ja: string;
     footer_text_vi: string;
     footer_text_ja: string;
+    show_date: boolean;
+    show_time: boolean;
     show_table_time: boolean;
     show_order_number: boolean;
+    show_table: boolean;
     show_time_seated: boolean;
     show_staff_name: boolean;
+    show_cashier: boolean;
     show_qr_code: boolean;
+    show_wifi: boolean;
+    wifi_ssid: string;
+    wifi_password: string;
     font_size: 'small' | 'medium' | 'large';
 }
 

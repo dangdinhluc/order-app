@@ -1,4 +1,3 @@
-import React from 'react';
 import { Outlet, NavLink as RouterNavLink, useLocation } from 'react-router-dom';
 import { ChefHat, Wifi, WifiOff, History, Layers } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -24,8 +23,7 @@ function NavLink({ to, label, icon, end = false }: { to: string; label: string; 
 
 export default function KitchenLayout({ children }: { children?: React.ReactNode }) {
     const [currentTime, setCurrentTime] = useState(new Date());
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [isConnected, setIsConnected] = useState(true); // Placeholder for socket status
+    const [isConnected] = useState(true); // Placeholder for socket status
 
     useEffect(() => {
         // Clock timer

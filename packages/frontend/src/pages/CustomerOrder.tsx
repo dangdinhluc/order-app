@@ -1,9 +1,9 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { socketService } from '../services/socket';
 import {
     ShoppingCart, Plus, Bell, Receipt,
-    Loader2, X, Check, AlertCircle, Globe
+    Loader2, X, Check, AlertCircle
 } from 'lucide-react';
 
 const TRANSLATIONS = {
